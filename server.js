@@ -2,37 +2,51 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Serve static files from the "public" folder
 app.use(express.static(path.join(__dirname, "public")));
 
-// Handle WebSocket connections
-wss.on("connection", (ws) => {
-    console.log("Client connected");
+let players = {};
 
-    ws.on("message", (message) => {
-        try {
-            const data = JSON.parse(message);
-            if (data.type === "join") {
-                console.log(`Player joined: ${data.name}`);
-                ws.send(JSON.stringify({ type: "welcome", msg: `Hello ${data.name}!` }));
+wss.on("connection", (ws) => {
+    const id = uuidv4();
+
+    ws.on("message", (msg) => {
+        const data = JSON.parse(msg);
+
+        if (data.type === "join") {
+            players[id] = { id, name: data.name, x: 300, y: 300 };
+            ws.send(JSON.stringify({ type: "init", id, players }));
+            broadcast({ type: "update", players });
+        }
+
+        if (data.type === "move") {
+            if (players[id]) {
+                players[id].x = data.x;
+                players[id].y = data.y;
+                broadcast({ type: "update", players });
             }
-        } catch (err) {
-            console.error("Invalid message from client:", message);
         }
     });
 
     ws.on("close", () => {
-        console.log("Client disconnected");
+        delete players[id];
+        broadcast({ type: "update", players });
     });
 });
 
-// Port for Render or local
+function broadcast(data) {
+    const json = JSON.stringify(data);
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(json);
+        }
+    });
+}
+
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
