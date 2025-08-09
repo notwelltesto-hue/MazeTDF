@@ -1,52 +1,68 @@
-const express = require("express");
-const http = require("http");
 const WebSocket = require("ws");
-const path = require("path");
-const { v4: uuidv4 } = require("uuid");
+const http = require("http");
 
-const app = express();
-const server = http.createServer(app);
+const server = http.createServer();
 const wss = new WebSocket.Server({ server });
-
-app.use(express.static(path.join(__dirname, "public")));
 
 let players = {};
 
+const TICK_RATE = 60; // updates per second
+const SPEED = 3; // player speed in px/tick
+
 wss.on("connection", (ws) => {
-    const id = uuidv4();
+    let playerId = null;
 
-    ws.on("message", (msg) => {
-        const data = JSON.parse(msg);
+    ws.on("message", (message) => {
+        try {
+            const data = JSON.parse(message);
 
-        if (data.type === "join") {
-            players[id] = { id, name: data.name, x: 300, y: 300 };
-            ws.send(JSON.stringify({ type: "init", id, players }));
-            broadcast({ type: "update", players });
-        }
-
-        if (data.type === "move") {
-            if (players[id]) {
-                players[id].x = data.x;
-                players[id].y = data.y;
-                broadcast({ type: "update", players });
+            if (data.type === "join") {
+                playerId = Date.now().toString();
+                players[playerId] = {
+                    id: playerId,
+                    name: data.name || "Player",
+                    x: Math.random() * 800 + 100,
+                    y: Math.random() * 600 + 100,
+                    keys: { up: false, down: false, left: false, right: false }
+                };
             }
+
+            if (data.type === "input" && playerId && players[playerId]) {
+                players[playerId].keys = data.keys;
+            }
+        } catch (err) {
+            console.error("Invalid message", err);
         }
     });
 
     ws.on("close", () => {
-        delete players[id];
-        broadcast({ type: "update", players });
+        if (playerId) {
+            delete players[playerId];
+        }
     });
 });
 
-function broadcast(data) {
-    const json = JSON.stringify(data);
-    wss.clients.forEach(client => {
+// Game loop
+setInterval(() => {
+    // Update positions based on keys
+    for (let id in players) {
+        const p = players[id];
+        if (p.keys.up) p.y -= SPEED;
+        if (p.keys.down) p.y += SPEED;
+        if (p.keys.left) p.x -= SPEED;
+        if (p.keys.right) p.x += SPEED;
+    }
+
+    // Broadcast state
+    const state = JSON.stringify({ type: "state", players });
+    wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(json);
+            client.send(state);
         }
     });
-}
+}, 1000 / TICK_RATE);
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Server listening on ws://localhost:${PORT}`);
+});
