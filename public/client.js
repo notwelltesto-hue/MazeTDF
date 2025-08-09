@@ -1,100 +1,70 @@
-const menu = document.getElementById("menu");
-const playBtn = document.getElementById("playBtn");
-const nameInput = document.getElementById("nameInput");
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let socket = null;
-let playerId = null;
-let players = {}; // all players in the game
+let players = {};
+let keys = { up: false, down: false, left: false, right: false };
 
-let keys = {};
+const socket = new WebSocket(`wss://${window.location.host}`);
 
-// ===== Start Game =====
-playBtn.addEventListener("click", () => {
-    const playerName = nameInput.value.trim();
-    if (!playerName) {
-        alert("Please enter a name");
-        return;
+// When connected, ask for name
+socket.addEventListener("open", () => {
+    const name = prompt("Enter your name:") || "Player";
+    socket.send(JSON.stringify({ type: "join", name }));
+});
+
+// When we receive state updates from server
+socket.addEventListener("message", (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "state") {
+        players = data.players;
     }
-
-    menu.style.display = "none";
-    canvas.style.display = "block";
-
-    socket = new WebSocket(`wss://${window.location.host}`);
-
-    socket.addEventListener("open", () => {
-        console.log("Connected to server");
-        socket.send(JSON.stringify({ type: "join", name: playerName }));
-    });
-
-    socket.addEventListener("message", (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === "init") {
-            playerId = data.id;
-            players = data.players;
-        }
-        if (data.type === "update") {
-            players = data.players;
-        }
-    });
-
-    startGameLoop();
 });
 
-// ===== Movement Input =====
-document.addEventListener("keydown", (e) => {
-    keys[e.key.toLowerCase()] = true;
-});
-document.addEventListener("keyup", (e) => {
-    keys[e.key.toLowerCase()] = false;
-});
-
-function handleMovement() {
-    if (!playerId || !players[playerId]) return;
-
-    let speed = 3;
-    if (keys["w"]) players[playerId].y -= speed;
-    if (keys["s"]) players[playerId].y += speed;
-    if (keys["a"]) players[playerId].x -= speed;
-    if (keys["d"]) players[playerId].x += speed;
-
-    socket.send(JSON.stringify({
-        type: "move",
-        x: players[playerId].x,
-        y: players[playerId].y
-    }));
+// Send key state to server
+function sendInput() {
+    socket.send(JSON.stringify({ type: "input", keys }));
 }
 
-// ===== Game Loop =====
-function startGameLoop() {
-    function loop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+// Keyboard events
+window.addEventListener("keydown", (e) => {
+    if (e.key === "w") keys.up = true;
+    if (e.key === "s") keys.down = true;
+    if (e.key === "a") keys.left = true;
+    if (e.key === "d") keys.right = true;
+    sendInput();
+});
+window.addEventListener("keyup", (e) => {
+    if (e.key === "w") keys.up = false;
+    if (e.key === "s") keys.down = false;
+    if (e.key === "a") keys.left = false;
+    if (e.key === "d") keys.right = false;
+    sendInput();
+});
 
-        handleMovement();
+// Game render loop
+function gameLoop() {
+    ctx.fillStyle = "#87CEEB";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        for (let id in players) {
-            const p = players[id];
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
-            ctx.fillStyle = id === playerId ? "#ffcc00" : "#888";
-            ctx.fill();
+    for (let id in players) {
+        const p = players[id];
+        
+        // Draw player as a red circle
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
+        ctx.fill();
 
-            ctx.fillStyle = "#000";
-            ctx.font = "14px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText(p.name, p.x, p.y - 30);
-        }
-
-        requestAnimationFrame(loop);
+        // Draw name above
+        ctx.fillStyle = "black";
+        ctx.font = "16px Arial";
+        ctx.fillText(p.name, p.x - ctx.measureText(p.name).width / 2, p.y - 30);
     }
-    requestAnimationFrame(loop);
+
+    requestAnimationFrame(gameLoop);
 }
 
-window.addEventListener("resize", () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-});
+gameLoop();
