@@ -1,5 +1,6 @@
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d");
+canvas.style.display = "none"; // start hidden
 document.body.style.margin = "0";
 document.body.appendChild(canvas);
 
@@ -10,11 +11,21 @@ let resources = [];
 let worldSize = 5000;
 
 let keys = {};
-let myName = prompt("Enter your name:") || "unknown";
-
+let myName = "";
 let pos = { x: 0, y: 0 };
 let vel = { x: 0, y: 0 };
 let speed = 3;
+
+// Hook Play button
+document.getElementById("playBtn").addEventListener("click", () => {
+    const nameInput = document.getElementById("nameInput");
+    myName = nameInput.value.trim() || "unknown";
+
+    document.getElementById("menu").style.display = "none";
+    canvas.style.display = "block";
+    connect();
+    loop();
+});
 
 function connect() {
     socket = new WebSocket(window.location.origin.replace(/^http/, "ws"));
@@ -50,7 +61,9 @@ function update() {
     pos.x += vel.x * speed;
     pos.y += vel.y * speed;
 
-    socket.send(JSON.stringify({ type: "update", x: pos.x, y: pos.y, name: myName }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "update", x: pos.x, y: pos.y, name: myName }));
+    }
 }
 
 function drawPlayer(p) {
@@ -138,6 +151,3 @@ function loop() {
 
 window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-
-connect();
-loop();
