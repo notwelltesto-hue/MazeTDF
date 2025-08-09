@@ -1,128 +1,107 @@
 window.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
 
     let socket;
     let playerId = null;
     let players = {};
     let resources = [];
-
+    let keys = {};
     let myName = "";
+    let worldSize = 5000;
 
-    // UI elements
-    const menu = document.getElementById("menu");
-    const nameInput = document.getElementById("nameInput");
-    const playBtn = document.getElementById("playBtn");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    playBtn.addEventListener("click", () => {
-        myName = nameInput.value.trim() || "Player";
-        menu.style.display = "none";
+    window.addEventListener("resize", () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+
+    document.getElementById("playBtn").addEventListener("click", () => {
+        const nameInput = document.getElementById("nameInput");
+        myName = nameInput.value.trim() || "unknown";
+
+        document.getElementById("menu").style.display = "none";
+        canvas.style.display = "block";
+
         connect();
+        gameLoop();
     });
 
     function connect() {
-        socket = new WebSocket(
-            (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host
-        );
+        const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+        socket = new WebSocket(wsProtocol + window.location.host);
 
-        socket.addEventListener("open", () => {
-            socket.send(JSON.stringify({ type: "setName", name: myName }));
-        });
+        socket.onopen = () => {
+            socket.send(JSON.stringify({ type: "join", name: myName }));
+        };
 
-        socket.addEventListener("message", (event) => {
+        socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            if (data.type === "state") {
-                players = {};
-                data.players.forEach((p) => {
-                    players[p.id] = p;
-                    if (p.name === myName) {
-                        playerId = p.id;
-                    }
-                });
+            if (data.type === "init") {
+                playerId = data.id;
+                players = data.players;
+                resources = data.resources || [];
+            } else if (data.type === "update") {
+                players = data.players;
                 resources = data.resources || [];
             }
-        });
-
-        // Movement input
-        document.addEventListener("keydown", (e) => {
-            socket.send(JSON.stringify({ type: "move", key: e.key, state: true }));
-        });
-        document.addEventListener("keyup", (e) => {
-            socket.send(JSON.stringify({ type: "move", key: e.key, state: false }));
-        });
+        };
     }
 
-    // Draw background grass tiles
-    function drawGrass(camX, camY) {
-        const tileSize = 50;
-        const startX = Math.floor(camX / tileSize) * tileSize;
-        const startY = Math.floor(camY / tileSize) * tileSize;
-        for (let x = startX - tileSize; x < camX + canvas.width + tileSize; x += tileSize) {
-            for (let y = startY - tileSize; y < camY + canvas.height + tileSize; y += tileSize) {
-                ctx.fillStyle = (Math.floor(x / tileSize) + Math.floor(y / tileSize)) % 2 === 0
-                    ? "#9ED98D"
-                    : "#91CE80";
-                ctx.fillRect(x - camX, y - camY, tileSize, tileSize);
-            }
+    function drawWorld() {
+        ctx.fillStyle = "#7ec850";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Get camera offset so player is centered
+        const me = players[playerId];
+        if (!me) return;
+        const camX = me.x - canvas.width / 2;
+        const camY = me.y - canvas.height / 2;
+
+        // Draw resources
+        for (const r of resources) {
+            ctx.fillStyle = r.type === "tree" ? "#228B22" : "#a9a9a9";
+            ctx.beginPath();
+            ctx.arc(r.x - camX, r.y - camY, r.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw players
+        for (const id in players) {
+            const p = players[id];
+            ctx.beginPath();
+            ctx.fillStyle = id === playerId ? "#ffdd55" : "#ff5555";
+            ctx.arc(p.x - camX, p.y - camY, 20, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#000";
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(p.name, p.x - camX, p.y - camY - 30);
         }
     }
 
-    // Draw loop
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (playerId && players[playerId]) {
-            const me = players[playerId];
-            const camX = me.x - canvas.width / 2;
-            const camY = me.y - canvas.height / 2;
-
-            // Background
-            drawGrass(camX, camY);
-
-            // Draw resources
-            resources.forEach((r) => {
-                ctx.beginPath();
-                ctx.arc(r.x - camX, r.y - camY, r.size, 0, Math.PI * 2);
-                ctx.fillStyle = r.type === "tree" ? "#228B22" : "#808080";
-                ctx.fill();
-            });
-
-            // Draw players
-            Object.values(players).forEach((p) => {
-                const px = p.x - camX;
-                const py = p.y - camY;
-
-                // Body
-                ctx.beginPath();
-                ctx.arc(px, py, 20, 0, Math.PI * 2);
-                ctx.fillStyle = "#F5CBA7";
-                ctx.fill();
-
-                // Head
-                ctx.beginPath();
-                ctx.arc(px, py - 25, 12, 0, Math.PI * 2);
-                ctx.fillStyle = "#FAD7A0";
-                ctx.fill();
-
-                // Hammer (placeholder)
-                ctx.strokeStyle = "#654321";
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                ctx.moveTo(px + 20, py);
-                ctx.lineTo(px + 35, py - 15);
-                ctx.stroke();
-
-                ctx.fillStyle = "#000";
-                ctx.font = "14px Arial";
-                ctx.textAlign = "center";
-                ctx.fillText(`${p.name} (Age ${p.age || 1})`, px, py - 45);
-            });
-        }
-
-        requestAnimationFrame(draw);
+    function gameLoop() {
+        update();
+        drawWorld();
+        requestAnimationFrame(gameLoop);
     }
 
-    draw();
+    function update() {
+        if (!socket || socket.readyState !== WebSocket.OPEN || !players[playerId]) return;
+        let dx = 0, dy = 0;
+        if (keys["w"]) dy -= 1;
+        if (keys["s"]) dy += 1;
+        if (keys["a"]) dx -= 1;
+        if (keys["d"]) dx += 1;
+
+        if (dx !== 0 || dy !== 0) {
+            socket.send(JSON.stringify({ type: "move", dx, dy }));
+        }
+    }
+
+    window.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
+    window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
 });
