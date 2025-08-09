@@ -100,7 +100,8 @@
   function generateInitialNeighborhood() {
     // leave everything unknown but generate around base and spawn area small radius
     generateAreaAround(base.x, base.y, 3);
-    spawnPoint.x = Math.random() < 0.5 ? 0 : COLS-1;
+    // FIX: Use seeded RNG for deterministic spawn side
+    spawnPoint.x = rng() < 0.5 ? 0 : COLS-1;
     spawnPoint.y = Math.floor(rng()*ROWS);
     generateAreaAround(spawnPoint.x, spawnPoint.y, 2);
     // ensure base and spawn are paths
@@ -185,7 +186,8 @@
     if (maze[y][x] === 1) return false;
     if (towers.some(t => t.x===x && t.y===y)) return false;
     if (type === TOWER.MINE && !gemNode[y][x]) return false;
-    if (x===base.x && y===base.y) return false;
+    // FIX: Removed rule that prevents building on the base tile, allowing the initial Lighter to be placed.
+    // The rule preventing stacking towers is sufficient.
     if (x===spawnPoint.x && y===spawnPoint.y) return false;
     return true;
   }
@@ -273,15 +275,15 @@
         let target = null;
         let best = Infinity;
         for (const e of enemies) {
-          // pick current enemy world position from path or interpolation
-          const ex = e.x - 0.5, ey = e.y - 0.5;
-          const d = Math.hypot(ex - t.x, ey - t.y);
-          if (d <= t.range + 0.5 && d < best) { best = d; target = e; }
+          // Correct center-to-center distance calculation
+          const d = Math.hypot((t.x + 0.5) - e.x, (t.y + 0.5) - e.y);
+          if (d <= t.range && d < best) { best = d; target = e; }
         }
         // compute angle to target if present
         if (target) {
-          const tx = (target.x) - t.x;
-          const ty = (target.y) - t.y;
+          // FIX: Calculate vector from tower's CENTER to enemy's center for correct aiming
+          const tx = target.x - (t.x + 0.5);
+          const ty = target.y - (t.y + 0.5);
           const desired = Math.atan2(ty, tx);
           // snap instantly to target for firing, otherwise rotate smoothly
           // For smooth rotation:
@@ -398,7 +400,7 @@
         ctx.fillStyle = 'gold';
         ctx.beginPath(); ctx.arc(cx,cy, TILE*0.3, 0, Math.PI*2); ctx.fill();
         ctx.strokeStyle = 'rgba(255,230,100,0.28)';
-        ctx.beginPath(); ctx.arc(cx,cy, TILE*2.6, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx,cy, TILE*4.0, 0, Math.PI*2); ctx.stroke();
       } else if (t.type === TOWER.MINE) {
         ctx.fillStyle = 'green';
         ctx.beginPath(); ctx.arc(cx,cy, TILE*0.26, 0, Math.PI*2); ctx.fill();
