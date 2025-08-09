@@ -1,8 +1,14 @@
-const WebSocket = require("ws");
+const express = require("express");
 const http = require("http");
+const WebSocket = require("ws");
+const path = require("path");
 
-const server = http.createServer();
+const app = express();
+const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+
+// Serve static files from /public
+app.use(express.static(path.join(__dirname, "public")));
 
 let players = {};
 
@@ -44,7 +50,6 @@ wss.on("connection", (ws) => {
 
 // Game loop
 setInterval(() => {
-    // Update positions based on keys
     for (let id in players) {
         const p = players[id];
         if (p.keys.up) p.y -= SPEED;
@@ -53,7 +58,6 @@ setInterval(() => {
         if (p.keys.right) p.x += SPEED;
     }
 
-    // Broadcast state
     const state = JSON.stringify({ type: "state", players });
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -64,5 +68,5 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-    console.log(`Server listening on ws://localhost:${PORT}`);
+    console.log(`Server running at http://localhost:${PORT}`);
 });
