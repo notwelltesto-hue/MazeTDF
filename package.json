@@ -1,17 +1,11 @@
 {
-  "name": "moomoo_clone",
+  "name": "maze-td",
   "version": "1.0.0",
-  "description": "Basic Moomoo.io-like multiplayer",
-  "main": "server.js",
+  "private": true,
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "uuid": "^9.0.1",
-    "ws": "^8.16.0"
-  },
-  "engines": {
-    "node": ">=18.x"
+    "express": "^4.18.2"
   }
 }
