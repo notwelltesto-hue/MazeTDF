@@ -1,0 +1,12 @@
+{
+  "name": "moomoo_clone",
+  "version": "1.0.0",
+  "description": "Simple moomoo.io-like prototype",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.0.0"
+  }
+}
