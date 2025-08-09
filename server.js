@@ -1,8 +1,19 @@
-const WebSocket = require("ws");
+const express = require("express");
 const http = require("http");
+const WebSocket = require("ws");
+const path = require("path");
 
-const server = http.createServer();
+const app = express();
+const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+
+// serve static files from "public"
+app.use(express.static(path.join(__dirname, "public")));
+
+// health check for Render
+app.get("/health", (req, res) => {
+    res.send("OK");
+});
 
 let players = {};
 let nextPlayerId = 1;
@@ -83,6 +94,6 @@ setInterval(() => {
 }, 1000 / 60);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server listening on ws://localhost:${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT}`);
 });
