@@ -1,13 +1,14 @@
 {
   "name": "moomoo_clone",
   "version": "1.0.0",
-  "description": "A simple Moomoo.io-style clone",
+  "description": "Basic Moomoo.io-like multiplayer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
+    "uuid": "^9.0.1",
     "ws": "^8.16.0"
   },
   "engines": {
