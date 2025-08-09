@@ -1,0 +1,432 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Maze TD - index.html</title>
+  <style>
+    body { background:#111; color:#ddd; font-family: sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
+    canvas { background:#000; image-rendering: crisp-edges; border:4px solid #222; }
+    .info { margin-top:8px; }
+    .hint { color:#aaa; font-size:13px; }
+  </style>
+</head>
+<body>
+  <h2 style="color:white">Maze Tower Defense — index.html</h2>
+  <canvas id="game"></canvas>
+  <div class="info">
+    <div id="hud"></div>
+    <div class="hint">Keys: 1 = Basic (blue), 2 = Lighter (yellow), 3 = Mine (green). Click to place towers on revealed path tiles.</div>
+  </div>
+
+<script>
+(() => {
+  // ----- Config -----
+  const TILE = 32;
+  const COLS = 17;
+  const ROWS = 17;
+  const CANVAS_W = COLS * TILE;
+  const CANVAS_H = ROWS * TILE;
+  const spawnIntervalMs = 1800;
+
+  // Costs
+  const COST = { basic: 20, lighter: 30, mine: 50 };
+
+  // Tower types
+  const TOWER = { BASIC: 'basic', LIGHTER: 'lighter', MINE: 'mine' };
+  let selectedTower = TOWER.BASIC;
+
+  // Game state
+  const canvas = document.getElementById('game');
+  canvas.width = CANVAS_W;
+  canvas.height = CANVAS_H;
+  const ctx = canvas.getContext('2d');
+
+  let gems = 120;
+  let lives = 10;
+
+  // Grid arrays
+  let maze = [];
+  let fog = [];
+  let gemNode = []; // tiles where a mine may be placed
+  let towers = [];
+  let enemies = [];
+  let lastSpawn = 0;
+
+  // Positions
+  const base = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
+  let spawnPoint = { x: 0, y: Math.floor(ROWS/2) };
+
+  // Timing
+  let lastFrameTime = performance.now();
+
+  // ---------- Maze generation ----------
+  function initGrid() {
+    maze = Array.from({length: ROWS}, () => Array(COLS).fill(1));
+    fog = Array.from({length: ROWS}, () => Array(COLS).fill(true));
+    gemNode = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  }
+
+  // Simple random maze with guaranteed path by carving route if needed
+  function generateMaze() {
+    initGrid();
+    // Randomly set walkable cells
+    for (let y=0;y<ROWS;y++){
+      for (let x=0;x<COLS;x++){
+        maze[y][x] = Math.random() < 0.25 ? 1 : 0; // 25% walls
+      }
+    }
+    // Ensure base is walkable
+    maze[base.y][base.x] = 0;
+
+    // Choose spawn on left or right edge randomly
+    spawnPoint.x = Math.random() < 0.5 ? 0 : COLS-1;
+    spawnPoint.y = Math.floor(Math.random() * ROWS);
+    maze[spawnPoint.y][spawnPoint.x] = 0;
+
+    // If no path, carve a corridor
+    if (!findPath(spawnPoint, base)) {
+      carvePath(spawnPoint, base);
+    }
+
+    // Reveal fog around base initially
+    revealFog(base.x, base.y, 3);
+  }
+
+  function carvePath(a,b) {
+    let x = a.x, y = a.y;
+    while (x !== b.x) {
+      maze[y][x] = 0;
+      x += x < b.x ? 1 : -1;
+    }
+    while (y !== b.y) {
+      maze[y][x] = 0;
+      y += y < b.y ? 1 : -1;
+    }
+    maze[b.y][b.x] = 0;
+  }
+
+  // BFS pathfinder (grid-based)
+  function findPath(start, goal) {
+    const q = [];
+    const visited = Array.from({length:ROWS}, () => Array(COLS).fill(false));
+    const prev = Array.from({length:ROWS}, () => Array(COLS).fill(null));
+    q.push(start);
+    visited[start.y][start.x] = true;
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    while (q.length) {
+      const cur = q.shift();
+      if (cur.x === goal.x && cur.y === goal.y) {
+        // reconstruct
+        const path = [];
+        let p = cur;
+        while (p) {
+          path.push({x:p.x,y:p.y});
+          p = prev[p.y][p.x];
+        }
+        return path.reverse();
+      }
+      for (const d of dirs) {
+        const nx = cur.x + d[0], ny = cur.y + d[1];
+        if (nx>=0 && nx<COLS && ny>=0 && ny<ROWS && !visited[ny][nx] && maze[ny][nx] === 0) {
+          visited[ny][nx] = true;
+          prev[ny][nx] = cur;
+          q.push({x:nx,y:ny});
+        }
+      }
+    }
+    return null;
+  }
+
+  // ----- Fog / gem node logic -----
+  function revealFog(cx, cy, radius) {
+    for (let y = cy - radius; y <= cy + radius; y++) {
+      for (let x = cx - radius; x <= cx + radius; x++) {
+        if (x>=0 && x<COLS && y>=0 && y<ROWS) {
+          // If newly revealed and is path, small chance to spawn gemNode
+          if (fog[y][x] && maze[y][x] === 0 && Math.random() < 0.12) {
+            gemNode[y][x] = true;
+          }
+          fog[y][x] = false;
+        }
+      }
+    }
+  }
+
+  // ----- Towers -----
+  function canPlaceTower(x,y,type) {
+    if (x<0||x>=COLS||y<0||y>=ROWS) return false;
+    if (maze[y][x] === 1) return false; // wall
+    if (fog[y][x]) return false; // hidden
+    if (towers.some(t => t.x===x && t.y===y)) return false; // occupied
+    if (type === TOWER.MINE && !gemNode[y][x]) return false; // mine only on gemNode
+    // don't place directly on base or spawn
+    if (x===base.x && y===base.y) return false;
+    if (x===spawnPoint.x && y===spawnPoint.y) return false;
+    return true;
+  }
+
+  function placeTower(x,y,type) {
+    if (!canPlaceTower(x,y,type)) return;
+    const cost = COST[type];
+    if (gems < cost) return;
+    gems -= cost;
+    if (type === TOWER.LIGHTER) {
+      revealFog(x,y,4);
+    }
+    const tower = {
+      x, y, type,
+      cooldown: 0,
+      fireRate: type===TOWER.BASIC ? 0.6 : 1.8, // seconds
+      range: type===TOWER.BASIC ? 3.2 : (type===TOWER.LIGHTER ? 0 : 0),
+      mineTimer: 0 // for mine
+    };
+    towers.push(tower);
+  }
+
+  // ----- Enemies -----
+  function spawnEnemy() {
+    const path = findPath(spawnPoint, base);
+    if (!path) {
+      // try carving and re-finding
+      carvePath(spawnPoint, base);
+    }
+    const finalPath = findPath(spawnPoint, base);
+    if (!finalPath) return;
+    // start at first path tile
+    enemies.push({
+      path: finalPath,
+      idx: 0,
+      x: finalPath[0].x + 0.5,
+      y: finalPath[0].y + 0.5,
+      speed: 1.2, // tiles per second
+      hp: 12 + Math.floor(Math.random()*8)
+    });
+  }
+
+  function updateEnemies(dt) {
+    for (let i = enemies.length-1; i>=0; i--) {
+      const e = enemies[i];
+      // target next node
+      if (e.idx >= e.path.length - 1) {
+        // reached base
+        lives -= 1;
+        enemies.splice(i,1);
+        continue;
+      }
+      const target = e.path[e.idx+1];
+      const tx = target.x + 0.5;
+      const ty = target.y + 0.5;
+      const dx = tx - e.x;
+      const dy = ty - e.y;
+      const dist = Math.hypot(dx,dy);
+      const move = e.speed * dt;
+      if (dist <= move) {
+        e.x = tx; e.y = ty; e.idx++;
+      } else {
+        e.x += (dx/dist) * move;
+        e.y += (dy/dist) * move;
+      }
+    }
+  }
+
+  // ----- Tower behavior -----
+  function updateTowers(dt) {
+    for (const t of towers) {
+      if (t.type === TOWER.BASIC) {
+        t.cooldown -= dt;
+        if (t.cooldown <= 0) {
+          // find nearest enemy within range (tile distance)
+          let target = null;
+          let bestDist = Infinity;
+          for (const e of enemies) {
+            const ex = e.x - 0.5, ey = e.y - 0.5;
+            const dx = ex - t.x, dy = ey - t.y;
+            const d = Math.hypot(dx, dy);
+            if (d <= t.range + 0.5 && d < bestDist) {
+              bestDist = d;
+              target = e;
+            }
+          }
+          if (target) {
+            // instant hit for simplicity (could create projectile)
+            target.hp -= 6;
+            t.cooldown = t.fireRate;
+            // reward on kill handled in enemy cleanup
+          } else {
+            // idle turret slowly regenerate small cooldown to allow quick next shot when enemy comes
+            t.cooldown = Math.max(-1, t.cooldown);
+          }
+        }
+      } else if (t.type === TOWER.MINE) {
+        // generate gems every few seconds
+        t.mineTimer += dt;
+        if (t.mineTimer >= 2.8) {
+          gems += 8 + Math.floor(Math.random()*8);
+          t.mineTimer = 0;
+        }
+      } else if (t.type === TOWER.LIGHTER) {
+        // nothing per-frame — placing already revealed area; could add periodic reveal
+      }
+    }
+    // remove dead enemies and award gems
+    for (let i=enemies.length-1;i>=0;i--) {
+      if (enemies[i].hp <= 0) {
+        gems += 8 + Math.floor(Math.random()*6);
+        enemies.splice(i,1);
+      }
+    }
+  }
+
+  // ----- Rendering -----
+  function drawGrid() {
+    for (let y=0;y<ROWS;y++){
+      for (let x=0;x<COLS;x++){
+        const px = x*TILE, py = y*TILE;
+        if (fog[y][x]) {
+          ctx.fillStyle = '#0b0b0b';
+          ctx.fillRect(px,py,TILE,TILE);
+        } else {
+          if (maze[y][x] === 1) {
+            ctx.fillStyle = '#3a3a3a'; // wall
+            ctx.fillRect(px,py,TILE,TILE);
+          } else {
+            ctx.fillStyle = '#bdbdbd'; // path
+            ctx.fillRect(px,py,TILE,TILE);
+            // subtle grid lines
+            ctx.strokeStyle = '#a6a6a6';
+            ctx.strokeRect(px,py,TILE,TILE);
+          }
+          // draw gemNode indicator (small sparkle)
+          if (gemNode[y][x]) {
+            ctx.fillStyle = '#8ff';
+            ctx.beginPath();
+            ctx.arc(px + TILE*0.75, py + TILE*0.25, 4, 0, Math.PI*2);
+            ctx.fill();
+          }
+        }
+      }
+    }
+    // draw base
+    ctx.fillStyle = '#444';
+    ctx.fillRect(base.x*TILE, base.y*TILE, TILE, TILE);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(base.x*TILE+6, base.y*TILE+6, TILE-12, TILE-12);
+  }
+
+  function drawTowers() {
+    for (const t of towers) {
+      const cx = t.x*TILE + TILE/2;
+      const cy = t.y*TILE + TILE/2;
+      if (t.type === TOWER.BASIC) {
+        ctx.fillStyle = 'blue';
+        ctx.beginPath();
+        ctx.arc(cx,cy, TILE*0.28, 0, Math.PI*2);
+        ctx.fill();
+        // draw small barrel
+        ctx.fillStyle = '#0066ff';
+        ctx.fillRect(cx-4, cy-12, 8, 10);
+      } else if (t.type === TOWER.LIGHTER) {
+        ctx.fillStyle = 'gold';
+        ctx.beginPath();
+        ctx.arc(cx,cy, TILE*0.3, 0, Math.PI*2);
+        ctx.fill();
+        // lighter aura
+        ctx.strokeStyle = 'rgba(255,230,100,0.4)';
+        ctx.beginPath();
+        ctx.arc(cx,cy, TILE*2.6, 0, Math.PI*2);
+        ctx.stroke();
+      } else if (t.type === TOWER.MINE) {
+        ctx.fillStyle = 'green';
+        ctx.beginPath();
+        ctx.arc(cx,cy, TILE*0.26, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#0a0';
+        ctx.fillRect(cx-6, cy+4, 12, 6);
+      }
+    }
+  }
+
+  function drawEnemies() {
+    for (const e of enemies) {
+      const cx = e.x * TILE;
+      const cy = e.y * TILE;
+      ctx.fillStyle = 'crimson';
+      ctx.fillRect(cx-10, cy-10, 20, 20);
+      // hp bar
+      ctx.fillStyle = '#222';
+      ctx.fillRect(cx-12, cy-16, 24, 4);
+      ctx.fillStyle = '#0f0';
+      const hpFrac = Math.max(0, e.hp) / 30;
+      ctx.fillRect(cx-12, cy-16, 24 * Math.min(1, hpFrac), 4);
+    }
+  }
+
+  function drawHUD() {
+    const hud = document.getElementById('hud');
+    hud.innerHTML = `Gems: <b>${gems}</b> &nbsp;&nbsp; Lives: <b>${lives}</b> &nbsp;&nbsp; Selected: <b>${selectedTower}</b> &nbsp;&nbsp; Cost: ${COST[selectedTower] || '-'}`;
+  }
+
+  // ----- Input -----
+  canvas.addEventListener('click', (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = ev.clientX - rect.left;
+    const my = ev.clientY - rect.top;
+    const gx = Math.floor(mx / TILE);
+    const gy = Math.floor(my / TILE);
+    placeTower(gx, gy, selectedTower);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '1') selectedTower = TOWER.BASIC;
+    else if (e.key === '2') selectedTower = TOWER.LIGHTER;
+    else if (e.key === '3') selectedTower = TOWER.MINE;
+  });
+
+  // ----- Game loop -----
+  function gameLoop(now) {
+    const dt = Math.min(0.1, (now - lastFrameTime)/1000);
+    lastFrameTime = now;
+
+    // spawn logic
+    lastSpawn += dt*1000;
+    if (lastSpawn >= spawnIntervalMs) {
+      spawnEnemy();
+      lastSpawn = 0;
+    }
+
+    // updates
+    updateEnemies(dt);
+    updateTowers(dt);
+
+    // draw
+    ctx.clearRect(0,0,CANVAS_W,CANVAS_H);
+    drawGrid();
+    drawTowers();
+    drawEnemies();
+    drawHUD();
+
+    // check game over
+    if (lives <= 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+      ctx.fillStyle = 'white';
+      ctx.font = '36px sans-serif';
+      ctx.fillText('Game Over', CANVAS_W/2 - 90, CANVAS_H/2);
+    } else {
+      requestAnimationFrame(gameLoop);
+    }
+  }
+
+  // ----- Init -----
+  generateMaze();
+  // give player a lighter at base for initial reveal
+  placeTower(base.x, base.y, TOWER.LIGHTER);
+  lastFrameTime = performance.now();
+  requestAnimationFrame(gameLoop);
+
+  // expose some helpers to console for debugging
+  window.__td = { maze, fog, gemNode, towers, enemies, placeTower, revealFog, findPath, base, spawnPoint };
+})();
+</script>
+</body>
+</html>
