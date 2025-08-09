@@ -38,10 +38,10 @@
   const ctx = canvas.getContext('2d');
 
   let gems = 120, lives = 10;
-  let maze = [];   // values: null = unknown, 0 = path, 1 = wall
-  let fog = [];    // booleans
-  let gemNode = []; // chance tile for mine
-  let generated = []; // whether cell generated/determined
+  let maze = [];
+  let fog = [];
+  let gemNode = [];
+  let generated = [];
   let towers = [];
   let enemies = [];
   let projectiles = [];
@@ -53,11 +53,10 @@
     x: 0,
     y: 0,
     zoom: 1,
-    speed: 300
+    speed: 400
   };
   const keys = {};
 
-  // Seeded RNG (mulberry32)
   function mulberry32(a) {
     return function() {
       a |= 0;
@@ -85,6 +84,8 @@
   }
 
   function initGrid(rows, cols) {
+    ROWS = rows;
+    COLS = cols;
     maze = Array.from({length: rows}, () => Array(cols).fill(null));
     fog = Array.from({length: rows}, () => Array(cols).fill(true));
     gemNode = Array.from({length: rows}, () => Array(cols).fill(false));
@@ -92,61 +93,64 @@
   }
 
     function expandWorld(top, right, bottom, left) {
-        if (top > 0) {
-            for (let i = 0; i < top; i++) {
-                maze.unshift(Array(COLS).fill(null));
-                fog.unshift(Array(COLS).fill(true));
-                gemNode.unshift(Array(COLS).fill(false));
-                generated.unshift(Array(COLS).fill(false));
-            }
-            ROWS += top;
-            base.y += top;
-            spawnPoint.y += top;
-            towers.forEach(t => t.y += top);
+        const expansionAmount = 15;
+        if (top) {
+            const add = Array.from({length: expansionAmount}, () => Array(COLS).fill(null));
+            maze.unshift(...add);
+            fog.unshift(...add);
+            gemNode.unshift(...add);
+            generated.unshift(...add);
+            ROWS += expansionAmount;
+            const shift = expansionAmount;
+            base.y += shift;
+            spawnPoint.y += shift;
+            towers.forEach(t => t.y += shift);
             enemies.forEach(e => {
-                e.y += top;
-                e.path.forEach(p => p.y +=top);
+                e.y += shift;
+                e.path.forEach(p => p.y += shift);
             });
-             projectiles.forEach(p => p.y += top);
+            projectiles.forEach(p => p.y += shift);
+            camera.y += shift * TILE;
         }
-        if (bottom > 0) {
-            for (let i = 0; i < bottom; i++) {
-                maze.push(Array(COLS).fill(null));
-                fog.push(Array(COLS).fill(true));
-                gemNode.push(Array(COLS).fill(false));
-                generated.push(Array(COLS).fill(false));
-            }
-            ROWS += bottom;
+        if (bottom) {
+             const add = Array.from({length: expansionAmount}, () => Array(COLS).fill(null));
+            maze.push(...add);
+            fog.push(...add);
+            gemNode.push(...add);
+            generated.push(...add);
+            ROWS += expansionAmount;
         }
-        if (left > 0) {
+        if (left) {
             for (let y = 0; y < ROWS; y++) {
-                for (let i = 0; i < left; i++) {
+                for(let i=0; i<expansionAmount; i++) {
                     maze[y].unshift(null);
                     fog[y].unshift(true);
                     gemNode[y].unshift(false);
                     generated[y].unshift(false);
                 }
             }
-            COLS += left;
-            base.x += left;
-            spawnPoint.x += left;
-            towers.forEach(t => t.x += left);
+            COLS += expansionAmount;
+            const shift = expansionAmount;
+            base.x += shift;
+            spawnPoint.x += shift;
+            towers.forEach(t => t.x += shift);
             enemies.forEach(e => {
-                e.x += left;
-                e.path.forEach(p => p.x +=left);
+                e.x += shift;
+                e.path.forEach(p => p.x += shift);
             });
-            projectiles.forEach(p => p.x += left);
+            projectiles.forEach(p => p.x += shift);
+            camera.x += shift * TILE;
         }
-        if (right > 0) {
+        if (right) {
             for (let y = 0; y < ROWS; y++) {
-                for (let i = 0; i < right; i++) {
+                 for(let i=0; i<expansionAmount; i++) {
                     maze[y].push(null);
                     fog[y].push(true);
                     gemNode[y].push(false);
                     generated[y].push(false);
                 }
             }
-            COLS += right;
+            COLS += expansionAmount;
         }
     }
 
@@ -154,7 +158,7 @@
   function deterministicTile(x,y) {
     const h = (GAME_SEED ^ (x*374761393) ^ (y*668265263)) >>> 0;
     const cellRng = mulberry32(h);
-    const isWall = cellRng() < 0.2 ? 1 : 0;
+    const isWall = cellRng() < 0.25 ? 1 : 0;
     const hasGemNode = (!isWall) && (cellRng() < 0.12);
     return { tile: isWall, gem: hasGemNode };
   }
@@ -249,9 +253,6 @@
     const cost = COST[type];
     if (gems < cost) return;
     gems -= cost;
-    if (type === TOWER.LIGHTER) {
-      revealArea(x,y,4);
-    }
     const tower = {
       x, y, type,
       cooldown: 0,
@@ -261,22 +262,24 @@
       mineTimer: 0
     };
     towers.push(tower);
+    if (type === TOWER.LIGHTER) {
+      revealArea(x,y,4);
+    }
   }
 
   function spawnEnemy() {
-    const p = findPath(spawnPoint, base);
-    if (!p) {
-      generateAreaAround(spawnPoint.x, spawnPoint.y, Math.max(2, Math.floor(Math.max(COLS,ROWS)/6)));
-    }
-    const final = findPath(spawnPoint, base);
-    if (!final) return;
+    generateAreaAround(spawnPoint.x, spawnPoint.y, 4);
+    const path = findPath(spawnPoint, base);
+    if (!path) return;
+    const maxHp = 20 + Math.floor(rng()*15);
     enemies.push({
-      path: final,
+      path,
       idx: 0,
-      x: final[0].x + 0.5,
-      y: final[0].y + 0.5,
-      speed: 1.2,
-      hp: 12 + Math.floor(rng()*8)
+      x: path[0].x + 0.5,
+      y: path[0].y + 0.5,
+      speed: 1.2 + rng() * 0.5,
+      hp: maxHp,
+      maxHp: maxHp
     });
   }
 
@@ -293,9 +296,8 @@
   function updateEnemies(dt) {
     for (let i = enemies.length-1; i>=0; i--) {
       const e = enemies[i];
-      if (!e.path || e.path.length === 0) { enemies.splice(i,1); continue; }
-      if (e.idx >= e.path.length - 1) {
-        lives -= 1;
+      if (!e.path || e.idx >= e.path.length - 1) {
+        if(e.path) lives -= 1;
         enemies.splice(i,1);
         continue;
       }
@@ -333,25 +335,25 @@
           if (t.cooldown <= 0) {
             projectiles.push({
               x: t.x + 0.5, y: t.y + 0.5,
-              vx: Math.cos(t.angle) * 7.0, vy: Math.sin(t.angle) * 7.0,
-              speed: 8.0, target: target, life: 1.2
+              vx: Math.cos(t.angle) * 8.0, vy: Math.sin(t.angle) * 8.0,
+              target: target, life: 1.2
             });
             t.cooldown = t.fireRate;
           }
         } else {
-          t.angle += 0.6 * dt;
+          t.angle += 0.5 * dt;
         }
       } else if (t.type === TOWER.MINE) {
         t.mineTimer += dt;
-        if (t.mineTimer >= 2.8) {
-          gems += 8 + Math.floor(rng()*8);
+        if (t.mineTimer >= 3.5) {
+          gems += 10 + Math.floor(rng()*8);
           t.mineTimer = 0;
         }
       }
     }
     for (let i=enemies.length-1;i>=0;i--) {
       if (enemies[i].hp <= 0) {
-        gems += 8 + Math.floor(rng()*6);
+        gems += 5 + Math.floor(rng()*5);
         enemies.splice(i,1);
       }
     }
@@ -369,8 +371,8 @@
       p.life -= dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (p.target && Math.hypot(p.x - p.target.x, p.y - p.target.y) < 0.6) {
-        if(p.target.hp > 0) p.target.hp -= 6;
+      if (p.target && p.target.hp > 0 && Math.hypot(p.x - p.target.x, p.y - p.target.y) < 0.5) {
+        p.target.hp -= 6;
         projectiles.splice(i,1);
         continue;
       }
@@ -378,36 +380,30 @@
     }
   }
 
-    function drawGrid() {
-        const TILE_ZOOMED = TILE * camera.zoom;
+  function drawGrid() {
         const view = {
             x: camera.x,
             y: camera.y,
             w: CANVAS_W,
             h: CANVAS_H
         };
-
-        const startCol = Math.floor(view.x / TILE_ZOOMED);
-        const endCol = Math.ceil((view.x + view.w) / TILE_ZOOMED);
-        const startRow = Math.floor(view.y / TILE_ZOOMED);
-        const endRow = Math.ceil((view.y + view.h) / TILE_ZOOMED);
-
+        const TILE_ZOOMED = TILE * camera.zoom;
+        const startCol = Math.floor(view.x / TILE);
+        const endCol = Math.ceil((view.x + view.w / camera.zoom) / TILE);
+        const startRow = Math.floor(view.y / TILE);
+        const endRow = Math.ceil((view.y + view.h / camera.zoom) / TILE);
 
         for (let y = startRow; y < endRow; y++) {
             for (let x = startCol; x < endCol; x++) {
                 if (!inBounds(x,y)) continue;
-                const px = x * TILE,
-                    py = y * TILE;
+                const px = x * TILE, py = y * TILE;
                 if (fog[y][x]) {
-                    ctx.fillStyle = '#0b0b0b';
+                    ctx.fillStyle = '#0c0c0c';
                     ctx.fillRect(px, py, TILE, TILE);
                 } else {
-                    if (maze[y][x] === 1) {
-                        ctx.fillStyle = '#3a3a3a';
-                        ctx.fillRect(px, py, TILE, TILE);
-                    } else {
-                        ctx.fillStyle = '#bdbdbd';
-                        ctx.fillRect(px, py, TILE, TILE);
+                    ctx.fillStyle = maze[y][x] === 1 ? '#3a3a3a' : '#bdbdbd';
+                    ctx.fillRect(px, py, TILE, TILE);
+                    if(maze[y][x] === 0) {
                         ctx.strokeStyle = '#a6a6a6';
                         ctx.strokeRect(px, py, TILE, TILE);
                     }
@@ -426,28 +422,29 @@
         ctx.fillRect(base.x * TILE + 6, base.y * TILE + 6, TILE - 12, TILE - 12);
     }
 
-
-    function drawTowers() {
+  function drawTowers() {
     for (const t of towers) {
       const cx = t.x*TILE + TILE/2;
       const cy = t.y*TILE + TILE/2;
       if (t.type === TOWER.BASIC) {
         ctx.fillStyle = 'blue';
-        ctx.beginPath(); ctx.arc(cx,cy, TILE*0.28, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx,cy, TILE*0.3, 0, Math.PI*2); ctx.fill();
         ctx.save();
         ctx.translate(cx,cy);
         ctx.rotate(t.angle);
         ctx.fillStyle = '#0033cc';
-        ctx.fillRect(0, -6, TILE*0.45, 12);
+        ctx.fillRect(0, -5, TILE*0.45, 10);
         ctx.restore();
       } else if (t.type === TOWER.LIGHTER) {
         ctx.fillStyle = 'gold';
         ctx.beginPath(); ctx.arc(cx,cy, TILE*0.3, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = 'rgba(255,230,100,0.28)';
-        ctx.beginPath(); ctx.arc(cx,cy, TILE*2.6, 0, Math.PI*2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,230,100,0.1)';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(cx,cy, TILE*4, 0, Math.PI*2); ctx.stroke();
+        ctx.lineWidth = 1;
       } else if (t.type === TOWER.MINE) {
         ctx.fillStyle = 'green';
-        ctx.beginPath(); ctx.arc(cx,cy, TILE*0.26, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx,cy, TILE*0.28, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#0a0';
         ctx.fillRect(cx-6, cy+4, 12, 6);
       }
@@ -459,20 +456,21 @@
       const cx = e.x * TILE;
       const cy = e.y * TILE;
       ctx.fillStyle = 'crimson';
-      ctx.fillRect(cx-10, cy-10, 20, 20);
+      ctx.fillRect(cx - 10, cy - 10, 20, 20);
+      // FIX: Use maxHp for stable health bar
+      const hpFrac = Math.max(0, e.hp) / e.maxHp;
       ctx.fillStyle = '#222';
-      ctx.fillRect(cx-12, cy-16, 24, 4);
+      ctx.fillRect(cx - 12, cy - 16, 24, 4);
       ctx.fillStyle = '#0f0';
-      const hpFrac = Math.max(0, e.hp) / (12 + Math.floor(rng()*8));
-      ctx.fillRect(cx-12, cy-16, 24 * Math.min(1, hpFrac), 4);
+      ctx.fillRect(cx - 12, cy - 16, 24 * hpFrac, 4);
     }
   }
 
   function drawProjectiles() {
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = 'yellow';
     for (const p of projectiles) {
       ctx.beginPath();
-      ctx.arc(p.x * TILE, p.y * TILE, 4, 0, Math.PI*2);
+      ctx.arc(p.x * TILE, p.y * TILE, 3, 0, Math.PI*2);
       ctx.fill();
     }
   }
@@ -482,23 +480,18 @@
     hud.innerHTML = `Seed: <b>${GAME_SEED}</b> &nbsp; Gems: <b>${gems}</b> &nbsp; Lives: <b>${lives}</b> &nbsp; Selected: <b>${selectedTower}</b> &nbsp; Cost: ${COST[selectedTower] || '-'}`;
   }
 
-    function screenToWorld(x, y) {
-        const worldX = (x + camera.x) / camera.zoom;
-        const worldY = (y + camera.y) / camera.zoom;
-        return {
-            x: worldX,
-            y: worldY
-        };
+  function screenToWorld(x, y) {
+        // FIX: Corrected the math for screen to world transformation
+        const worldX = (x / camera.zoom) + camera.x;
+        const worldY = (y / camera.zoom) + camera.y;
+        return { x: worldX, y: worldY };
     }
 
-
-    canvas.addEventListener('click', (ev) => {
+  canvas.addEventListener('click', (ev) => {
         const rect = canvas.getBoundingClientRect();
         const mx = ev.clientX - rect.left;
         const my = ev.clientY - rect.top;
-
         const worldCoords = screenToWorld(mx, my);
-
         const gx = Math.floor(worldCoords.x / TILE);
         const gy = Math.floor(worldCoords.y / TILE);
         placeTower(gx, gy, selectedTower);
@@ -515,16 +508,29 @@
     }
   });
 
-    document.addEventListener('keyup', (e) => {
-        keys[e.key.toLowerCase()] = false;
-    });
+  document.addEventListener('keyup', (e) => {
+    keys[e.key.toLowerCase()] = false;
+  });
 
   let lastFrameTime = performance.now();
-    function gameLoop(now) {
+  function gameLoop(now) {
         const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
         lastFrameTime = now;
 
         updateCamera(dt);
+        
+        // FIX: Moved world expansion logic before any updates or drawing
+        const view = { x: camera.x, y: camera.y, w: CANVAS_W, h: CANVAS_H };
+        const TILE_ZOOMED = TILE * camera.zoom;
+        const startCol = Math.floor(view.x / TILE);
+        const endCol = Math.ceil((view.x + view.w / camera.zoom) / TILE);
+        const startRow = Math.floor(view.y / TILE);
+        const endRow = Math.ceil((view.y + view.h / camera.zoom) / TILE);
+        
+        if (startCol < 2) expandWorld(false, false, false, true);
+        if (endCol > COLS - 2) expandWorld(false, true, false, false);
+        if (startRow < 2) expandWorld(true, false, false, false);
+        if (endRow > ROWS - 2) expandWorld(false, false, true, false);
 
         lastSpawn += dt * 1000;
         if (lastSpawn >= spawnIntervalMs) {
@@ -538,36 +544,15 @@
 
         ctx.save();
         ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-        ctx.translate(-camera.x, -camera.y);
         ctx.scale(camera.zoom, camera.zoom);
-
-
-        const TILE_ZOOMED = TILE * camera.zoom;
-        const view = {
-            x: camera.x,
-            y: camera.y,
-            w: CANVAS_W,
-            h: CANVAS_H
-        };
-
-        const startCol = Math.floor(view.x / TILE_ZOOMED);
-        const endCol = Math.ceil((view.x + view.w) / TILE_ZOOMED);
-        const startRow = Math.floor(view.y / TILE_ZOOMED);
-        const endRow = Math.ceil((view.y + view.h) / TILE_ZOOMED);
-
-        if (startCol < 2) expandWorld(0, 0, 0, 10);
-        if (endCol > COLS - 2) expandWorld(0, 10, 0, 0);
-        if (startRow < 2) expandWorld(10, 0, 0, 0);
-        if (endRow > ROWS - 2) expandWorld(0, 0, 10, 0);
-
-
+        ctx.translate(-camera.x, -camera.y);
+        
         drawGrid();
         drawTowers();
         drawEnemies();
         drawProjectiles();
 
         ctx.restore();
-
         drawHUD();
 
         if (lives <= 0) {
@@ -575,42 +560,47 @@
             ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
             ctx.fillStyle = 'white';
             ctx.font = '36px sans-serif';
-            ctx.fillText('Game Over', CANVAS_W / 2 - 90, CANVAS_H / 2);
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over', CANVAS_W / 2, CANVAS_H / 2);
         } else {
             requestAnimationFrame(gameLoop);
         }
     }
 
+  function updateCamera(dt) {
+    if (keys['w']) camera.y -= camera.speed * dt / camera.zoom;
+    if (keys['s']) camera.y += camera.speed * dt / camera.zoom;
+    if (keys['a']) camera.x -= camera.speed * dt / camera.zoom;
+    if (keys['d']) camera.x += camera.speed * dt / camera.zoom;
+    if (keys['q']) camera.zoom *= (1 + dt);
+    if (keys['e']) camera.zoom *= (1 - dt);
+    camera.zoom = Math.max(0.3, Math.min(camera.zoom, 4));
+  }
 
-    function updateCamera(dt) {
-        if (keys['w']) camera.y -= camera.speed * dt / camera.zoom;
-        if (keys['s']) camera.y += camera.speed * dt / camera.zoom;
-        if (keys['a']) camera.x -= camera.speed * dt / camera.zoom;
-        if (keys['d']) camera.x += camera.speed * dt / camera.zoom;
-
-        if (keys['q']) camera.zoom *= (1 + dt);
-        if (keys['e']) camera.zoom *= (1 - dt);
-
-        camera.zoom = Math.max(0.2, Math.min(camera.zoom, 5));
-    }
-
-
-  function initGame(keepSeed=false) {
-    if (!keepSeed) {
+  function initGame(reseed=false) {
+    if (!reseed) {
       GAME_SEED = parseSeed();
-      rng = mulberry32(GAME_SEED);
-    } else {
-      rng = mulberry32(GAME_SEED);
     }
+    rng = mulberry32(GAME_SEED);
+
+    COLS = 25;
+    ROWS = 25;
+    base = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
+    
     gems = 120; lives = 10; towers = []; enemies = []; projectiles = [];
     initGrid(ROWS, COLS);
     generateInitialNeighborhood();
+    
+    // Place initial tower at base (must be after towers array is cleared)
     placeTower(base.x, base.y, TOWER.LIGHTER);
+
     lastFrameTime = performance.now();
     lastSpawn = 0;
 
-    camera.x = (base.x * TILE - CANVAS_W / 2 / camera.zoom);
-    camera.y = (base.y * TILE - CANVAS_H / 2 / camera.zoom);
+    camera.zoom = 1;
+    // Center camera on the base's center
+    camera.x = (base.x + 0.5) * TILE - (CANVAS_W / 2 / camera.zoom);
+    camera.y = (base.y + 0.5) * TILE - (CANVAS_H / 2 / camera.zoom);
   }
 
   window.__td = { setSeed, getSeed: () => GAME_SEED, rng, maze, fog, gemNode, towers, enemies };
