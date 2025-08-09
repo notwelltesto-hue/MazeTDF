@@ -7,70 +7,80 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// serve static files from "public"
 app.use(express.static(path.join(__dirname, "public")));
 
-// health check for Render
-app.get("/health", (req, res) => {
-    res.send("OK");
-});
+const TICK_RATE = 60;
+const WORLD_SIZE = 5000;
+const RESOURCE_COUNT = 200;
 
 let players = {};
-let nextPlayerId = 1;
+let resources = [];
 
-function getAgeFromXP(xp) {
-    if (xp < 100) return 1;
-    if (xp < 300) return 2;
-    if (xp < 600) return 3;
-    return 4;
+// Generate resources
+function spawnResources() {
+    resources = [];
+    for (let i = 0; i < RESOURCE_COUNT; i++) {
+        resources.push({
+            id: i,
+            type: Math.random() < 0.5 ? "tree" : "rock",
+            x: Math.random() * WORLD_SIZE - WORLD_SIZE / 2,
+            y: Math.random() * WORLD_SIZE - WORLD_SIZE / 2,
+            hp: 100
+        });
+    }
+}
+spawnResources();
+
+function broadcast(data) {
+    const msg = JSON.stringify(data);
+    for (let client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(msg);
+        }
+    }
 }
 
 wss.on("connection", (ws) => {
-    const id = nextPlayerId++;
+    const id = Math.random().toString(36).substr(2, 9);
     players[id] = {
         id,
-        name: "unknown",
         x: 0,
         y: 0,
+        name: "unknown",
         hp: 100,
-        xp: 0,
         age: 1,
-        inventory: {
-            apples: 0
-        }
+        xp: 0,
+        inventory: { apple: 0 }
     };
 
-    ws.on("message", (msg) => {
-        try {
-            const data = JSON.parse(msg);
+    ws.send(JSON.stringify({ type: "init", id, players, resources, worldSize: WORLD_SIZE }));
 
-            if (data.type === "setName") {
-                players[id].name = data.name;
-            }
+    ws.on("message", (message) => {
+        const data = JSON.parse(message);
 
-            if (data.type === "move") {
+        if (data.type === "update") {
+            if (players[id]) {
                 players[id].x = data.x;
                 players[id].y = data.y;
+                players[id].name = data.name;
             }
+        }
+        else if (data.type === "gather") {
+            let res = resources.find(r => r.id === data.id);
+            if (res && res.hp > 0) {
+                res.hp -= 10;
+                if (res.hp <= 0) {
+                    if (res.type === "tree") players[id].xp += 5;
+                    if (res.type === "rock") players[id].xp += 8;
 
-            if (data.type === "harvest") {
-                // Gain XP and chance for apples
-                players[id].xp += 5;
-                if (Math.random() < 0.1) {
-                    players[id].inventory.apples++;
+                    if (players[id].xp >= players[id].age * 100) {
+                        players[id].age++;
+                        players[id].xp = 0;
+                    }
+                    resources.splice(resources.indexOf(res), 1);
+                    spawnResources();
                 }
-                players[id].age = getAgeFromXP(players[id].xp);
             }
-
-            if (data.type === "eatApple") {
-                if (players[id].inventory.apples > 0) {
-                    players[id].inventory.apples--;
-                    players[id].hp = Math.min(players[id].hp + 20, 100);
-                }
-            }
-
-        } catch (err) {
-            console.error("Invalid message", err);
         }
     });
 
@@ -79,21 +89,9 @@ wss.on("connection", (ws) => {
     });
 });
 
-// Broadcast state at 60 FPS
 setInterval(() => {
-    const payload = {
-        type: "state",
-        players: Object.values(players)
-    };
-    const msg = JSON.stringify(payload);
-    wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(msg);
-        }
-    });
-}, 1000 / 60);
+    broadcast({ type: "state", players, resources });
+}, 1000 / TICK_RATE);
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening on http://0.0.0.0:${PORT}`);
-});
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`Server listening on ws://localhost:${PORT}`));
