@@ -1,6 +1,44 @@
 <!doctype html>
 <html>
 <head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Moomoo Clone — Age Progression</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="homeScreen" class="overlay">
+  <div class="panel">
+    <h1>Moomoo Clone</h1>
+    <input id="nameInputHome" placeholder="Enter name" maxlength="20"/>
+    <div class="row">
+      <label>Tool:</label>
+      <select id="toolSelect"><option value="hammer">Hammer</option><option value="hand">Hand</option></select>
+    </div>
+    <button id="joinBtn">Play</button>
+    <p class="hint">Use WASD to move, mouse to aim, left-click to hit (harvest), click apple in inventory to heal.</p>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="info">Not connected</div>
+  <div id="topBar">
+    <div id="nameWrap"></div>
+    <div id="xpWrap">XP: <span id="xpVal">0</span> — Age: <span id="ageVal">1</span></div>
+  </div>
+  <div id="inventory">
+    <button id="appleBtn">Apple ✚ (<span id="appleCount">0</span>)</button>
+    <button id="hammerBtn">Hammer</button>
+  </div>
+</div>
+
+<canvas id="game"></canvas>
+<script src="client.js"></script>
+</body>
+</html>
+<!doctype html>
+<html>
+<head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Moomoo Clone (Prototype)</title>
