@@ -1,11 +1,11 @@
-// js/main.js (Updated)
+// js/main.js (Corrected)
 
 import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, TOWER } from './config.js';
 import { camera, keys, gameState, setSeed, resetState } from './state.js';
 import * as world from './world.js';
 import * as entities from './entities.js';
 import * as drawing from './drawing.js';
-import { loadAssets } from './assets.js'; // Import the asset loader
+import { loadAssets } from './assets.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -14,6 +14,7 @@ canvas.height = CANVAS_H;
 
 // ---------- Game Loop & Core Functions ----------
 let lastFrameTime = performance.now();
+let animationFrameId = null; // To control the game loop
 
 function gameLoop(now) {
     const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
@@ -48,7 +49,7 @@ function gameLoop(now) {
     if (gameState.lives <= 0) {
         drawing.drawGameOver(ctx);
     } else {
-        requestAnimationFrame(gameLoop);
+        animationFrameId = requestAnimationFrame(gameLoop);
     }
 }
 
@@ -67,10 +68,6 @@ function initGame(reseed = false) {
     camera.zoom = 1;
     camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
     camera.y = (gameState.base.y + 0.5) * TILE_SIZE - (CANVAS_H / 2);
-
-    if (reseed) {
-        requestAnimationFrame(gameLoop);
-    }
 }
 
 // ---------- Input & Camera ----------
@@ -103,7 +100,12 @@ document.addEventListener('keydown', (e) => {
     else if (e.key === '2') gameState.selectedTower = TOWER.LIGHTER;
     else if (e.key === '3') gameState.selectedTower = TOWER.MINE;
     else if (e.key.toLowerCase() === 'r') {
+        // FIX: Properly cancel the old loop and restart with the new state
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
         initGame(true);
+        requestAnimationFrame(gameLoop);
     }
 });
 
@@ -116,19 +118,17 @@ window.addEventListener('resize', () => {
 });
 
 // --- Start Game ---
-// UPDATED: Create an async function to handle asset loading
 async function startGame() {
     const hud = document.getElementById('hud');
     try {
         hud.innerHTML = 'Loading assets...';
-        await loadAssets(); // Wait for all images to download
+        await loadAssets();
         initGame(false);
-        requestAnimationFrame(gameLoop);
+        animationFrameId = requestAnimationFrame(gameLoop);
     } catch (error) {
         console.error("Could not start game:", error);
         hud.innerHTML = `<strong>Error:</strong> Could not load game assets. Please check the console (F12) for details.`;
     }
 }
 
-// Call the new async start function
 startGame();
