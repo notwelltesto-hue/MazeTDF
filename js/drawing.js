@@ -77,10 +77,20 @@ export function drawTowers(ctx) {
         const cy = (t.y + 0.5) * TILE_SIZE;
         const size = TILE_SIZE;
         ctx.globalAlpha = t.isConstructing ? 0.5 + t.buildProgress * 0.5 : 1.0;
+
+        // --- UPDATED: Draw Basic Tower Sprite ---
         if (t.type === TOWER.BASIC) {
-            ctx.fillStyle = 'blue'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.save(); ctx.translate(cx, cy); ctx.rotate(t.angle);
-            ctx.fillStyle = '#0033cc'; ctx.fillRect(0, -5, TILE_SIZE * 0.45, 10); ctx.restore();
+            if (assets.basicTower) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                // The sprite faces up, so we add 90 degrees (PI/2) to align it with the game's 0-degree rightward angle
+                ctx.rotate(t.angle + Math.PI / 2);
+                ctx.drawImage(assets.basicTower, -size / 2, -size / 2, size, size);
+                ctx.restore();
+            } else {
+                // Fallback drawing
+                ctx.fillStyle = 'blue'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
+            }
         } else if (t.type === TOWER.LIGHTER) {
             if (assets.lightTower) ctx.drawImage(assets.lightTower, cx - size / 2, cy - size / 2, size, size);
             else { ctx.fillStyle = 'gold'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill(); }
@@ -93,6 +103,7 @@ export function drawTowers(ctx) {
             ctx.strokeStyle = t.isPowered ? '#fff' : '#aaa';
             ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.2, 0, Math.PI * 2); ctx.stroke();
         }
+
         ctx.globalAlpha = 1.0;
         const barWidth = TILE_SIZE * 0.8;
         const barY = cy - TILE_SIZE * 0.6;
@@ -137,13 +148,16 @@ export function drawPlacementPreview(ctx) {
     const size = TILE_SIZE;
     const isValid = canPlaceTower(x,y);
     ctx.globalAlpha = 0.5;
+
     let icon = null;
     if (type === TOWER.MINE) icon = assets.gemMine;
     else if (type === TOWER.LIGHTER) icon = assets.lightTower;
-    else if (type === TOWER.BASIC) icon = assets.basicTowerIcon;
+    else if (type === TOWER.BASIC) icon = assets.basicTower; // UPDATED
     else if (type === TOWER.SUPPLY) icon = assets.supplyRelayIcon;
-    if (icon) ctx.drawImage(icon, cx - size / 2, cy - size / 2, size, size);
-    else {
+
+    if (icon) {
+        ctx.drawImage(icon, cx - size / 2, cy - size / 2, size, size);
+    } else {
         ctx.fillStyle = isValid ? 'green' : 'red';
         ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
     }
@@ -194,9 +208,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
             ctx.fillText(line, x, y);
             line = words[n] + ' ';
             y += lineHeight;
-        } else {
-            line = testLine;
-        }
+        } else { line = testLine; }
     }
     ctx.fillText(line, x, y);
 }
@@ -219,12 +231,9 @@ function drawTooltip(ctx) {
     const slotX = startX + guiState.hoveredSlot * (GUI_CONFIG.HOTBAR_SLOT_SIZE + GUI_CONFIG.HOTBAR_SLOT_GAP);
     const tooltipY = CANVAS_H - GUI_CONFIG.HOTBAR_Y_OFFSET - GUI_CONFIG.HOTBAR_SLOT_SIZE - 20;
     const tooltipX = slotX + GUI_CONFIG.HOTBAR_SLOT_SIZE / 2;
-    const lines = info.desc.split('\n'); // Simple split for now, can be improved
-    const tooltipHeight = 60 + lines.length * 18;
-    ctx.fillStyle = GUI_CONFIG.TOOLTIP_BG_COLOR;
-    ctx.strokeStyle = GUI_CONFIG.TOOLTIP_BORDER_COLOR;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
+    const tooltipHeight = 110;
+    ctx.fillStyle = GUI_CONFIG.TOOLTIP_BG_COLOR; ctx.strokeStyle = GUI_CONFIG.TOOLTIP_BORDER_COLOR;
+    ctx.lineWidth = 1; ctx.beginPath();
     ctx.roundRect(tooltipX - GUI_CONFIG.TOOLTIP_WIDTH / 2, tooltipY - tooltipHeight, GUI_CONFIG.TOOLTIP_WIDTH, tooltipHeight, 5);
     ctx.fill(); ctx.stroke();
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
@@ -250,7 +259,7 @@ function drawHotbar(ctx) {
         const iconY = y + (GUI_CONFIG.HOTBAR_SLOT_SIZE - iconSize) / 2;
         let icon = null;
         const towerType = HOTBAR_TOWERS[i];
-        if (towerType === TOWER.BASIC) icon = assets.basicTowerIcon;
+        if (towerType === TOWER.BASIC) icon = assets.basicTower; // UPDATED
         else if (towerType === TOWER.LIGHTER) icon = assets.lightTower;
         else if (towerType === TOWER.MINE) icon = assets.gemMine;
         else if (towerType === TOWER.SUPPLY) icon = assets.supplyRelayIcon;
