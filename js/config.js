@@ -7,12 +7,12 @@ export const CHUNK_SIZE = 16;
 export let CANVAS_W = window.innerWidth;
 export let CANVAS_H = window.innerHeight;
 
+// UPDATED: Reverted to the original, faster spawn interval.
 export const spawnIntervalMs = 1700;
 export const BUILD_TIME_SECONDS = 3.0;
 
 export const COST = { basic: 20, lighter: 30, mine: 50, supply: 40 };
 
-// Defines the attack/supply range of towers for drawing previews
 export const TOWER_RANGES = {
     [TOWER.BASIC]: 3.2,
     [TOWER.SUPPLY]: 7,
