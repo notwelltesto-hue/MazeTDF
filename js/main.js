@@ -1,4 +1,4 @@
-// js/main.js
+// js/main.js (Corrected)
 
 import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, TOWER } from './config.js';
 import { camera, keys, gameState, setSeed, resetState } from './state.js';
@@ -33,20 +33,15 @@ function gameLoop(now) {
     // --- Drawing ---
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    // FIX: Correct rendering transform. Scale first, then translate.
     ctx.scale(camera.zoom, camera.zoom);
-    ctx.translate(-camera.x * TILE_SIZE, -camera.y * TILE_SIZE);
+    ctx.translate(-camera.x, -camera.y);
 
-    // Set line width for all scaled drawings
-    ctx.lineWidth = 1 / TILE_SIZE;
-
-    // Scale all drawing operations by tile size
-    ctx.save();
-    ctx.scale(TILE_SIZE, TILE_SIZE);
+    // All drawing functions now work in world pixel coordinates
     drawing.drawGrid(ctx);
     drawing.drawTowers(ctx);
     drawing.drawEnemies(ctx);
     drawing.drawProjectiles(ctx);
-    ctx.restore();
 
     ctx.restore();
     drawing.drawHUD();
@@ -60,7 +55,7 @@ function gameLoop(now) {
 
 // ---------- Initialization ----------
 function initGame(reseed = false) {
-    if (!reseed) {
+    if (reseed) {
         setSeed(Math.floor(Math.random() * 0x7fffffff));
     }
     resetState();
@@ -71,37 +66,38 @@ function initGame(reseed = false) {
     lastFrameTime = performance.now();
 
     camera.zoom = 1;
-    camera.x = gameState.base.x + 0.5 - (CANVAS_W / 2 / TILE_SIZE);
-    camera.y = gameState.base.y + 0.5 - (CANVAS_H / 2 / TILE_SIZE);
+    camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
+    camera.y = (gameState.base.y + 0.5) * TILE_SIZE - (CANVAS_H / 2);
 
-    // Start the game loop if it's not the first time
+    // Start the game loop if it's a reset
     if (reseed) {
-       requestAnimationFrame(gameLoop);
+        requestAnimationFrame(gameLoop);
     }
 }
 
 // ---------- Input & Camera ----------
 function updateCamera(dt) {
     const moveSpeed = camera.speed * dt / camera.zoom;
-    if (keys['w']) camera.y -= moveSpeed / TILE_SIZE;
-    if (keys['s']) camera.y += moveSpeed / TILE_SIZE;
-    if (keys['a']) camera.x -= moveSpeed / TILE_SIZE;
-    if (keys['d']) camera.x += moveSpeed / TILE_SIZE;
+    if (keys['w']) camera.y -= moveSpeed;
+    if (keys['s']) camera.y += moveSpeed;
+    if (keys['a']) camera.x -= moveSpeed;
+    if (keys['d']) camera.x += moveSpeed;
     if (keys['q']) camera.zoom *= (1 + dt);
     if (keys['e']) camera.zoom *= (1 - dt);
     camera.zoom = Math.max(0.3, Math.min(camera.zoom, 4));
 }
 
-function screenToWorld(x, y) {
-    const worldX = x / camera.zoom + camera.x * TILE_SIZE;
-    const worldY = y / camera.zoom + camera.y * TILE_SIZE;
-    return { x: worldX / TILE_SIZE, y: worldY / TILE_SIZE };
+// FIX: Corrected screen-to-world coordinate conversion
+function screenToWorld(sx, sy) {
+    const worldX = sx / camera.zoom + camera.x;
+    const worldY = sy / camera.zoom + camera.y;
+    return { x: Math.floor(worldX / TILE_SIZE), y: Math.floor(worldY / TILE_SIZE) };
 }
 
 canvas.addEventListener('click', (ev) => {
     const rect = canvas.getBoundingClientRect();
     const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
-    entities.placeTower(Math.floor(worldCoords.x), Math.floor(worldCoords.y), gameState.selectedTower);
+    entities.placeTower(worldCoords.x, worldCoords.y, gameState.selectedTower);
 });
 
 document.addEventListener('keydown', (e) => {
