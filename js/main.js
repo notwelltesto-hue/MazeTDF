@@ -55,9 +55,8 @@ function initGame(reseed = false) {
         setSeed(Math.floor(Math.random() * 0x7fffffff));
     }
     resetState();
-    // Start with a small revealed area around the base
-    world.revealArea(gameState.base.x, gameState.base.y, 2);
-    // UPDATED: Now that the initial reveal is done, allow spawners to be created.
+    // UPDATED: Reveal a larger area at the start
+    world.revealArea(gameState.base.x, gameState.base.y, 5);
     gameState.allowSpawners = true;
 
     lastFrameTime = performance.now();
@@ -123,7 +122,6 @@ window.addEventListener('resize', () => {
     canvas.height = CANVAS_H;
 });
 
-// UPDATED: StartGame function now handles the loading bar
 async function startGame() {
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingBar = document.getElementById('loading-bar');
@@ -134,11 +132,10 @@ async function startGame() {
         };
         await loadAssets(onProgress);
 
-        // Hide loading screen
         loadingOverlay.style.opacity = '0';
         setTimeout(() => {
             loadingOverlay.style.display = 'none';
-        }, 500); // Wait for fade out animation
+        }, 500);
 
         initGame(false);
         animationFrameId = requestAnimationFrame(gameLoop);
