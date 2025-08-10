@@ -1,7 +1,7 @@
 // js/entities.js
 
-import { gameState, rng } from './state.js';
-import { COST, TOWER, BUILD_TIME_SECONDS } from './config.js';
+import { gameState, guiState } from './state.js';
+import { COST, BUILD_TIME_SECONDS, HOTBAR_TOWERS, TOWER } from './config.js';
 import * as world from './world.js';
 
 function normalizeAngle(a) {
@@ -29,9 +29,10 @@ function updateSupplyNetwork() {
 }
 
 export function canPlaceTower(x, y) {
+    const selectedTowerType = HOTBAR_TOWERS[guiState.hotbarSlot];
     const tile = world.getTile(x, y);
     if (tile.isFoggy || tile.tile === 1 || gameState.towers.some(t => t.x === x && t.y === y)) return false;
-    if (gameState.selectedTower === TOWER.MINE && !tile.hasGemNode) return false;
+    if (selectedTowerType === TOWER.MINE && !tile.hasGemNode) return false;
     if (x === gameState.base.x && y === gameState.base.y) return false;
     const sources = [gameState.base, ...gameState.towers.filter(t => t.type === TOWER.SUPPLY && t.isPowered)];
     for(const source of sources) {
@@ -40,7 +41,8 @@ export function canPlaceTower(x, y) {
     return false;
 }
 
-export function placeTower(x, y, type) {
+export function placeTower(x, y) {
+    const type = HOTBAR_TOWERS[guiState.hotbarSlot];
     if (!canPlaceTower(x, y) || gameState.gems < COST[type]) return;
     gameState.gems -= COST[type];
     const tower = {
@@ -105,7 +107,7 @@ export function updateTowers(dt) {
         } else if (t.type === TOWER.MINE) {
             t.mineTimer += dt;
             if (t.mineTimer >= 3.5) {
-                gameState.gems += 10 + Math.floor(rng() * 8);
+                gameState.gems += 10;
                 t.mineTimer = 0;
             }
         }
@@ -128,30 +130,21 @@ function findClosestTarget(enemy) {
 
 export function spawnEnemy(gameTime) {
     if (gameState.spawnPoints.length === 0) return;
-    const spawnPoint = gameState.spawnPoints[Math.floor(rng() * gameState.spawnPoints.length)];
-    const maxHp = 20 + Math.floor(rng() * 20) + Math.floor(gameTime / 30000);
-    gameState.enemies.push({
-        x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5,
-        speed: 1.2 + rng() * 0.6,
-        hp: maxHp, maxHp,
-        path: [], target: null, attackCooldown: 0,
-        pathfindingCooldown: 0 // ADDED: For freeze prevention
-    });
+    const spawnPoint = gameState.spawnPoints[Math.floor(Math.random() * gameState.spawnPoints.length)];
+    const maxHp = 20 + Math.floor(Math.random() * 20) + Math.floor(gameTime / 30000);
+    gameState.enemies.push({ x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5, speed: 1.2 + Math.random() * 0.6, hp: maxHp, maxHp, path: [], target: null, attackCooldown: 0, pathfindingCooldown: 0 });
 }
 
 export function updateEnemies(dt) {
     for (let i = gameState.enemies.length - 1; i >= 0; i--) {
         const e = gameState.enemies[i];
-        if (e.hp <= 0) {
-            gameState.enemies.splice(i, 1);
-            continue;
-        }
+        if (e.hp <= 0) { gameState.enemies.splice(i, 1); continue; }
         e.attackCooldown -= dt;
-        e.pathfindingCooldown -= dt; // Decrement cooldown
+        e.pathfindingCooldown -= dt;
 
         if (!e.target || e.target.hp <= 0) {
             e.target = findClosestTarget(e);
-            e.path = null; // Invalidate path to force recalculation
+            e.path = null;
         }
 
         const targetPos = { x: e.target.x + 0.5, y: e.target.y + 0.5 };
@@ -164,23 +157,17 @@ export function updateEnemies(dt) {
                 if (e.target === gameState.base) gameState.lives--;
             }
         } else {
-            // Pathfind only if cooldown is over
             if (!e.path && e.pathfindingCooldown <= 0) {
                 e.path = world.findPath(e, e.target);
-                // If pathfinding fails, set a cooldown to prevent constant checks
-                if (!e.path) {
-                    e.pathfindingCooldown = 2.0;
-                }
+                if (!e.path) e.pathfindingCooldown = 2.0;
             }
-
             if (e.path && e.path.length > 0) {
                 const nextNode = e.path[0];
                 const tx = nextNode.x + 0.5, ty = nextNode.y + 0.5;
                 const distToNode = Math.hypot(tx - e.x, ty - e.y);
                 const move = e.speed * dt;
                 if (distToNode < move) {
-                    e.x = tx;
-                    e.y = ty;
+                    e.x = tx; e.y = ty;
                     e.path.shift();
                 } else {
                     e.x += (tx - e.x) / distToNode * move;
@@ -202,8 +189,6 @@ export function updateProjectiles(dt) {
             gameState.projectiles.splice(i, 1);
             continue;
         }
-        if (p.life <= 0 || p.target?.hp <= 0) {
-            gameState.projectiles.splice(i, 1);
-        }
+        if (p.life <= 0 || p.target?.hp <= 0) gameState.projectiles.splice(i, 1);
     }
 }
