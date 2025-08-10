@@ -3,7 +3,6 @@
 import { CHUNK_SIZE } from './config.js';
 import { GAME_SEED, gameState } from './state.js';
 
-// mulberry32 is a simple, high-quality deterministic random number generator.
 function mulberry32(a) {
     return function() {
       a |= 0;
@@ -14,52 +13,35 @@ function mulberry32(a) {
     };
 }
 
-// --- NEW: Core Maze Generation Logic ---
-
-// This function creates a deterministic, random-looking priority for any given cell.
-// This is the "secret sauce" that allows the maze to be generated infinitely.
 function getCellPriority(x, y) {
     const h = (GAME_SEED ^ (x * 374761393) ^ (y * 668265263)) >>> 0;
     const cellRng = mulberry32(h);
     return cellRng();
 }
 
-// This is the new heart of the maze generation. It determines if a tile is a wall or a path.
 function deterministicMazeTile(x, y) {
-    // Treat the world as a grid of "rooms" on odd coordinates.
     const isRoomX = Math.abs(x % 2) === 1;
     const isRoomY = Math.abs(y % 2) === 1;
 
-    // "Rooms" are always open paths.
     if (isRoomX && isRoomY) {
-        return { tile: 0, gem: getCellPriority(x,y) < 0.05 }; // 5% chance for a gem in a room
+        return { tile: 0, gem: getCellPriority(x,y) < 0.05 };
     }
 
-    // Tiles at (even, even) coordinates are the solid corners between paths. Always walls.
     if (!isRoomX && !isRoomY) {
         return { tile: 1, gem: false };
     }
 
-    // We are now left with potential passages (walls that can be carved).
-    // A passage at (odd, even) is a horizontal wall.
-    // A passage at (even, odd) is a vertical wall.
-
-    // Get the coordinates of the two "rooms" this wall is between.
     const r1x = isRoomX ? x : x - 1;
     const r1y = isRoomY ? y : y - 1;
     const r2x = isRoomX ? x : x + 1;
     const r2y = isRoomY ? y : y + 1;
 
-    // Get the deterministic priorities for those two rooms.
     const p1 = getCellPriority(r1x, r1y);
     const p2 = getCellPriority(r2x, r2y);
 
-    // To create the maze, we need to find the "parent" of the higher-priority room.
-    // The parent is the neighbor with the lowest priority.
     const highP_x = p1 > p2 ? r1x : r2x;
     const highP_y = p1 > p2 ? r1y : r2y;
 
-    // Get priorities of all four neighbors of the high-priority room.
     const neighbors = [
         { x: highP_x, y: highP_y - 2, priority: getCellPriority(highP_x, highP_y - 2) }, // North
         { x: highP_x + 2, y: highP_y, priority: getCellPriority(highP_x + 2, highP_y) }, // East
@@ -67,7 +49,6 @@ function deterministicMazeTile(x, y) {
         { x: highP_x - 2, y: highP_y, priority: getCellPriority(highP_x - 2, highP_y) }, // West
     ];
 
-    // Find the neighbor with the absolute lowest priority.
     let minPriority = Infinity;
     let parentX = 0, parentY = 0;
     for(const n of neighbors) {
@@ -78,19 +59,14 @@ function deterministicMazeTile(x, y) {
         }
     }
 
-    // The wall is carved (becomes a path) if it's the wall that connects the
-    // high-priority room to its lowest-priority neighbor (its "parent").
     const wallConnectsToParent = (r1x === parentX && r1y === parentY) || (r2x === parentX && r2y === parentY);
 
     if (wallConnectsToParent) {
-        return { tile: 0, gem: false }; // It's a path
+        return { tile: 0, gem: false };
     }
 
-    return { tile: 1, gem: false }; // It's a wall
+    return { tile: 1, gem: false };
 }
-
-
-// --- Chunk System (Updated to use the new maze algorithm) ---
 
 function worldToChunkCoords(worldX, worldY) {
     const cx = Math.floor(worldX / CHUNK_SIZE);
@@ -108,19 +84,23 @@ function generateChunk(cx, cy) {
     };
     const worldStartX = cx * CHUNK_SIZE;
     const worldStartY = cy * CHUNK_SIZE;
+
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
-            // UPDATED: Use the new maze generation function
-            const det = deterministicMazeTile(worldStartX + lx, worldStartY + ly);
+            const worldX = worldStartX + lx;
+            const worldY = worldStartY + ly;
+
+            const det = deterministicMazeTile(worldX, worldY);
             chunk.tiles[ly][lx] = det.tile;
             chunk.gemNodes[ly][lx] = det.gem;
+
+            // NEW: Force a clear, open area around the base
+            const STARTING_CLEAR_RADIUS = 3; // Creates a 7x7 open area
+            if (Math.hypot(worldX, worldY) <= STARTING_CLEAR_RADIUS) {
+                chunk.tiles[ly][lx] = 0; // Force path
+                chunk.gemNodes[ly][lx] = false; // No gems in the immediate start area
+            }
         }
-    }
-    // HACK: Ensure the base is always an open space, overriding the maze algorithm if needed.
-    if (cx === 0 && cy === 0) {
-        chunk.tiles[0][0] = 0;
-        chunk.tiles[0][1] = 0;
-        chunk.tiles[1][0] = 0;
     }
     return chunk;
 }
