@@ -21,6 +21,12 @@ export let rng = mulberry32(GAME_SEED);
 export const camera = { x: 0, y: 0, zoom: 1, speed: 400 };
 export const keys = {};
 
+export const guiState = {
+    hotbarSlot: 0,
+    hoveredSlot: null,
+    isMouseOverGUI: false,
+};
+
 export const gameState = {
     gems: 0,
     lives: 0,
@@ -31,11 +37,10 @@ export const gameState = {
     spawnPoints: [],
     base: { x: 0, y: 0, hp: 500, maxHp: 500 },
     lastSpawn: 0,
-    selectedTower: 'basic',
     hoveredTower: null,
     mouseGridPos: { x: 0, y: 0 },
     animationTimer: 0,
-    allowSpawners: false, // ADDED: Flag for the "peaceful start"
+    allowSpawners: false,
 };
 
 export function setSeed(newSeed) {
@@ -55,5 +60,6 @@ export function resetState() {
     gameState.lastSpawn = 0;
     gameState.hoveredTower = null;
     gameState.animationTimer = 0;
-    gameState.allowSpawners = false; // Set to false on every reset
+    gameState.allowSpawners = false;
+    guiState.hotbarSlot = 0;
 }
