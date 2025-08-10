@@ -50,15 +50,32 @@ export function drawGrid(ctx) {
     });
 }
 
+// UPDATED: Renders a nice energy beam for supply lines
 function drawSupplyLines(ctx) {
-    ctx.lineWidth = 2;
-    const pulse = Math.sin(gameState.animationTimer * 4) * 0.25 + 0.75;
-    ctx.strokeStyle = `rgba(220, 200, 255, ${pulse})`;
+    const pulse = 0.6 + Math.sin(gameState.animationTimer * 5) * 0.4; // Fast, sharp pulse
+
     for(const t of gameState.towers) {
         if(t.isPowered && t.powerSource) {
+            const startX = (t.x + 0.5) * TILE_SIZE;
+            const startY = (t.y + 0.5) * TILE_SIZE;
+            const endX = (t.powerSource.x + 0.5) * TILE_SIZE;
+            const endY = (t.powerSource.y + 0.5) * TILE_SIZE;
+
+            // Outer glow
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = `rgba(180, 150, 255, ${pulse * 0.3})`;
+            ctx.lineWidth = 10;
             ctx.beginPath();
-            ctx.moveTo((t.x + 0.5) * TILE_SIZE, (t.y + 0.5) * TILE_SIZE);
-            ctx.lineTo((t.powerSource.x + 0.5) * TILE_SIZE, (t.powerSource.y + 0.5) * TILE_SIZE);
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Inner core
+            ctx.strokeStyle = `rgba(220, 200, 255, ${pulse * 0.8})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
             ctx.stroke();
         }
     }
@@ -93,10 +110,13 @@ export function drawTowers(ctx) {
             if (assets.gemMine) ctx.drawImage(assets.gemMine, cx - size / 2, cy - size / 2, size, size);
             else { ctx.fillStyle = 'green'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.28, 0, Math.PI * 2); ctx.fill(); }
         } else if (t.type === TOWER.SUPPLY) {
-            ctx.fillStyle = t.isPowered ? '#d4a3ff' : '#6b5380';
-            ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.35, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = t.isPowered ? '#fff' : '#aaa';
-            ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.2, 0, Math.PI * 2); ctx.stroke();
+            // UPDATED: Use the sprite for the supply tower
+            if (assets.supplyRelayIcon) {
+                 ctx.drawImage(assets.supplyRelayIcon, cx - size / 2, cy - size / 2, size, size);
+            } else {
+                ctx.fillStyle = t.isPowered ? '#d4a3ff' : '#6b5380';
+                ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.35, 0, Math.PI * 2); ctx.fill();
+            }
         }
         ctx.globalAlpha = 1.0;
         const barWidth = TILE_SIZE * 0.8;
