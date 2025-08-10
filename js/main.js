@@ -34,12 +34,14 @@ function gameLoop(now) {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.scale(camera.zoom, camera.zoom);
     ctx.translate(-camera.x, -camera.y);
+
     drawing.drawGrid(ctx);
     drawing.drawTowers(ctx);
     drawing.drawEnemies(ctx);
     drawing.drawProjectiles(ctx);
     drawing.drawHoverOverlay(ctx);
     drawing.drawPlacementPreview(ctx);
+
     ctx.restore();
     drawing.drawHUD();
 
@@ -57,7 +59,7 @@ function initGame(reseed = false) {
     resetState();
     // Start with a small revealed area around the base
     world.revealArea(gameState.base.x, gameState.base.y, 2);
-    // Spawners will now appear organically
+    // Spawners will now appear organically as the player explores.
     lastFrameTime = performance.now();
     camera.zoom = 1;
     camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
