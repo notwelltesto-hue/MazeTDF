@@ -13,11 +13,10 @@ function mulberry32(a) {
     };
 }
 
-// REVERTED: This is the simpler, noise-based world generation algorithm.
 function deterministicTile(x, y) {
     const h = (GAME_SEED ^ (x * 374761393) ^ (y * 668265263)) >>> 0;
     const cellRng = mulberry32(h);
-    const isWall = cellRng() < 0.33; // 33% chance for a tile to be a wall
+    const isWall = cellRng() < 0.33;
     const hasGem = cellRng() < 0.12;
     return { tile: isWall ? 1 : 0, gem: !isWall && hasGem };
 }
@@ -39,49 +38,38 @@ function generateChunk(cx, cy) {
     const worldStartX = cx * CHUNK_SIZE;
     const worldStartY = cy * CHUNK_SIZE;
 
-    // First Pass: Generate the chunk based on the simple noise algorithm
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
             const worldX = worldStartX + lx;
             const worldY = worldStartY + ly;
-            // Use the reverted function here
             const det = deterministicTile(worldX, worldY);
             chunk.tiles[ly][lx] = det.tile;
             chunk.gemNodes[ly][lx] = det.gem;
         }
     }
 
-    // Second Pass (only for the starting chunk): Guarantee a clear area and minimum gems
     if (cx === 0 && cy === 0) {
         const STARTING_CLEAR_RADIUS = 3;
         const MIN_GEMS = 3;
         let gemCount = 0;
         const potentialGemSpots = [];
-
-        // Clear the area and find spots for new gems
         for (let y = -STARTING_CLEAR_RADIUS; y <= STARTING_CLEAR_RADIUS; y++) {
             for (let x = -STARTING_CLEAR_RADIUS; x <= STARTING_CLEAR_RADIUS; x++) {
                 if (Math.hypot(x, y) > STARTING_CLEAR_RADIUS) continue;
                 const { cx: cxt, cy: cyt, lx, ly } = worldToChunkCoords(x, y);
                 if (cxt === 0 && cyt === 0) {
-                    chunk.tiles[ly][lx] = 0; // Force path
+                    chunk.tiles[ly][lx] = 0;
                     if (chunk.gemNodes[ly][lx]) gemCount++;
                     else if (x !== 0 || y !== 0) potentialGemSpots.push({lx, ly});
                 }
             }
         }
-
-        // Carve four guaranteed exits to connect to the rest of the world
         const exitDist = STARTING_CLEAR_RADIUS + 1;
         const exits = [{x: 0, y: exitDist}, {x: 0, y: -exitDist}, {x: exitDist, y: 0}, {x: -exitDist, y: 0}];
         for(const exit of exits) {
             const {cx: cxt, cy: cyt, lx, ly} = worldToChunkCoords(exit.x, exit.y);
-            if (cxt === 0 && cyt === 0) {
-                 chunk.tiles[ly][lx] = 0;
-            }
+            if (cxt === 0 && cyt === 0) chunk.tiles[ly][lx] = 0;
         }
-
-        // Add gems if needed
         let gemsToAdd = MIN_GEMS - gemCount;
         for (let i = potentialGemSpots.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -98,9 +86,7 @@ function generateChunk(cx, cy) {
 
 export function getChunk(cx, cy) {
     const key = `${cx},${cy}`;
-    if (!gameState.chunks.has(key)) {
-        gameState.chunks.set(key, generateChunk(cx, cy));
-    }
+    if (!gameState.chunks.has(key)) gameState.chunks.set(key, generateChunk(cx, cy));
     return gameState.chunks.get(key);
 }
 
@@ -122,9 +108,7 @@ export function revealArea(worldX, worldY, radius) {
             const chunk = getChunk(cx, cy);
             if (chunk.fog[ly][lx]) {
                 chunk.fog[ly][lx] = false;
-                if (chunk.tiles[ly][lx] === 0) {
-                    scanForNewSpawner(x, y);
-                }
+                if (chunk.tiles[ly][lx] === 0) scanForNewSpawner(x, y);
             }
         }
     }
@@ -141,9 +125,7 @@ function scanForNewSpawner(x, y) {
     }
     if (!isEdgeOfDarkness) return;
     if (gameState.spawnPoints.some(sp => Math.hypot(sp.x - x, sp.y - y) < 15)) return;
-    if (findPath({ x, y }, gameState.base)) {
-        gameState.spawnPoints.push({ x, y });
-    }
+    if (findPath({ x, y }, gameState.base)) gameState.spawnPoints.push({ x, y });
 }
 
 export function findPath(start, goal) {
@@ -151,13 +133,10 @@ export function findPath(start, goal) {
     const q = [{ x: Math.floor(start.x), y: Math.floor(start.y), path: [] }];
     const visited = new Set([`${Math.floor(start.x)},${Math.floor(start.y)}`]);
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-
     while (q.length > 0) {
         const cur = q.shift();
         const curKey = `${cur.x},${cur.y}`;
-        if (curKey === goalKey) {
-            return cur.path;
-        }
+        if (curKey === goalKey) return cur.path;
         for (const d of dirs) {
             const nx = cur.x + d[0];
             const ny = cur.y + d[1];
