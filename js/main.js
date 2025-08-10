@@ -1,6 +1,6 @@
 // js/main.js
 
-import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, HOTBAR_TOWERS, GUI_CONFIG } from './config.js';
+import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, HOTBAR_TOWERS, GUI_CONFIG, TOWER } from './config.js';
 import { camera, keys, gameState, guiState, setSeed, resetState } from './state.js';
 import * as world from './world.js';
 import * as entities from './entities.js';
@@ -19,12 +19,22 @@ function gameLoop(now) {
     const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
     lastFrameTime = now;
     gameState.animationTimer += dt;
+
     updateCamera(dt);
+
+    // UPDATED: This is the robust spawn timer logic
     gameState.lastSpawn += dt * 1000;
-    if (gameState.lastSpawn >= spawnIntervalMs) entities.spawnEnemy(now);
+    // Use a while loop to handle cases where multiple enemies should spawn after a lag spike
+    while (gameState.lastSpawn >= spawnIntervalMs) {
+        entities.spawnEnemy(now);
+        // Subtract the interval instead of resetting to zero. This preserves leftover time.
+        gameState.lastSpawn -= spawnIntervalMs;
+    }
+
     entities.updateEnemies(dt);
     entities.updateProjectiles(dt);
     entities.updateTowers(dt);
+
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.scale(camera.zoom, camera.zoom);
@@ -37,6 +47,7 @@ function gameLoop(now) {
     drawing.drawPlacementPreview(ctx);
     ctx.restore();
     drawing.drawGUI(ctx);
+
     if (gameState.lives <= 0 || gameState.base.hp <= 0) {
         drawing.drawGameOver(ctx);
     } else {
@@ -45,10 +56,12 @@ function gameLoop(now) {
 }
 
 function initGame(reseed = false) {
-    if (reseed) setSeed(Math.floor(Math.random() * 0x7fffffff));
+    if (reseed) {
+        setSeed(Math.floor(Math.random() * 0x7fffffff));
+    }
     resetState();
     world.revealArea(gameState.base.x, gameState.base.y, 5);
-    const startLighter = { x: gameState.base.x + 2, y: gameState.base.y, type: 'lighter', hp: 100, maxHp: 100, isConstructing: false, buildProgress: 1 };
+    const startLighter = { x: gameState.base.x + 2, y: gameState.base.y, type: TOWER.LIGHTER, hp: 100, maxHp: 100, isConstructing: false, buildProgress: 1, };
     gameState.towers.push(startLighter);
     world.revealArea(startLighter.x, startLighter.y, 5);
     gameState.allowSpawners = true;
