@@ -13,59 +13,13 @@ function mulberry32(a) {
     };
 }
 
-function getCellPriority(x, y) {
+// REVERTED: This is the simpler, noise-based world generation algorithm.
+function deterministicTile(x, y) {
     const h = (GAME_SEED ^ (x * 374761393) ^ (y * 668265263)) >>> 0;
     const cellRng = mulberry32(h);
-    return cellRng();
-}
-
-function deterministicMazeTile(x, y) {
-    const isRoomX = Math.abs(x % 2) === 1;
-    const isRoomY = Math.abs(y % 2) === 1;
-
-    if (isRoomX && isRoomY) {
-        return { tile: 0, gem: getCellPriority(x,y) < 0.05 };
-    }
-
-    if (!isRoomX && !isRoomY) {
-        return { tile: 1, gem: false };
-    }
-
-    const r1x = isRoomX ? x : x - 1;
-    const r1y = isRoomY ? y : y - 1;
-    const r2x = isRoomX ? x : x + 1;
-    const r2y = isRoomY ? y : y + 1;
-
-    const p1 = getCellPriority(r1x, r1y);
-    const p2 = getCellPriority(r2x, r2y);
-
-    const highP_x = p1 > p2 ? r1x : r2x;
-    const highP_y = p1 > p2 ? r1y : r2y;
-
-    const neighbors = [
-        { x: highP_x, y: highP_y - 2, priority: getCellPriority(highP_x, highP_y - 2) },
-        { x: highP_x + 2, y: highP_y, priority: getCellPriority(highP_x + 2, highP_y) },
-        { x: highP_x, y: highP_y + 2, priority: getCellPriority(highP_x, highP_y + 2) },
-        { x: highP_x - 2, y: highP_y, priority: getCellPriority(highP_x - 2, highP_y) },
-    ];
-
-    let minPriority = Infinity;
-    let parentX = 0, parentY = 0;
-    for(const n of neighbors) {
-        if (n.priority < minPriority) {
-            minPriority = n.priority;
-            parentX = n.x;
-            parentY = n.y;
-        }
-    }
-
-    const wallConnectsToParent = (r1x === parentX && r1y === parentY) || (r2x === parentX && r2y === parentY);
-
-    if (wallConnectsToParent) {
-        return { tile: 0, gem: false };
-    }
-
-    return { tile: 1, gem: false };
+    const isWall = cellRng() < 0.33; // 33% chance for a tile to be a wall
+    const hasGem = cellRng() < 0.12;
+    return { tile: isWall ? 1 : 0, gem: !isWall && hasGem };
 }
 
 function worldToChunkCoords(worldX, worldY) {
@@ -85,16 +39,19 @@ function generateChunk(cx, cy) {
     const worldStartX = cx * CHUNK_SIZE;
     const worldStartY = cy * CHUNK_SIZE;
 
+    // First Pass: Generate the chunk based on the simple noise algorithm
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
             const worldX = worldStartX + lx;
             const worldY = worldStartY + ly;
-            const det = deterministicMazeTile(worldX, worldY);
+            // Use the reverted function here
+            const det = deterministicTile(worldX, worldY);
             chunk.tiles[ly][lx] = det.tile;
             chunk.gemNodes[ly][lx] = det.gem;
         }
     }
 
+    // Second Pass (only for the starting chunk): Guarantee a clear area and minimum gems
     if (cx === 0 && cy === 0) {
         const STARTING_CLEAR_RADIUS = 3;
         const MIN_GEMS = 3;
@@ -107,14 +64,14 @@ function generateChunk(cx, cy) {
                 if (Math.hypot(x, y) > STARTING_CLEAR_RADIUS) continue;
                 const { cx: cxt, cy: cyt, lx, ly } = worldToChunkCoords(x, y);
                 if (cxt === 0 && cyt === 0) {
-                    chunk.tiles[ly][lx] = 0;
+                    chunk.tiles[ly][lx] = 0; // Force path
                     if (chunk.gemNodes[ly][lx]) gemCount++;
                     else if (x !== 0 || y !== 0) potentialGemSpots.push({lx, ly});
                 }
             }
         }
 
-        // UPDATED: Carve four guaranteed exits to connect to the main maze
+        // Carve four guaranteed exits to connect to the rest of the world
         const exitDist = STARTING_CLEAR_RADIUS + 1;
         const exits = [{x: 0, y: exitDist}, {x: 0, y: -exitDist}, {x: exitDist, y: 0}, {x: -exitDist, y: 0}];
         for(const exit of exits) {
@@ -123,7 +80,6 @@ function generateChunk(cx, cy) {
                  chunk.tiles[ly][lx] = 0;
             }
         }
-
 
         // Add gems if needed
         let gemsToAdd = MIN_GEMS - gemCount;
