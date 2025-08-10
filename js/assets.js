@@ -5,8 +5,9 @@ export const assets = {};
 
 // A list of all assets we want to load
 const assetList = [
-    // FIX: Corrected path to be relative to the index.html file
-    { name: 'gemMine', src: 'moomooclone/media/gemMine.png' }
+    // FIX: The path is relative to index.html. Since they are in the same
+    // root folder ('moomoo'), the path is simply 'media/gemMine.png'.
+    { name: 'gemMine', src: 'media/gemMine.png' }
 ];
 
 let assetsLoaded = 0;
