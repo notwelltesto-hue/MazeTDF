@@ -55,8 +55,19 @@ function initGame(reseed = false) {
         setSeed(Math.floor(Math.random() * 0x7fffffff));
     }
     resetState();
-    // UPDATED: Reveal a larger area at the start
+    
+    // Reveal a larger area at the start
     world.revealArea(gameState.base.x, gameState.base.y, 5);
+
+    // UPDATED: Place a free lighter tower to kickstart expansion and spawner reveal
+    // This doesn't cost gems and bypasses the normal placement rules.
+    const startLighter = {
+        x: gameState.base.x + 2, y: gameState.base.y, type: TOWER.LIGHTER,
+        hp: 100, maxHp: 100, isConstructing: false, buildProgress: 1,
+    };
+    gameState.towers.push(startLighter);
+    world.revealArea(startLighter.x, startLighter.y, 5);
+
     gameState.allowSpawners = true;
 
     lastFrameTime = performance.now();
