@@ -47,10 +47,41 @@ function gameLoop(now) {
     }
 }
 
-function initGame(reseed = false) { /* ... no changes ... */ }
-function updateCamera(dt) { /* ... no changes ... */ }
-function screenToWorld(sx, sy) { /* ... no changes ... */ }
-function handleMouseMove(ev) { /* ... no changes ... */ }
+function initGame(reseed = false) {
+    if (reseed) {
+        setSeed(Math.floor(Math.random() * 0x7fffffff));
+    }
+    resetState();
+    world.revealArea(gameState.base.x, gameState.base.y, 4);
+    entities.placeTower(gameState.base.x + 1, gameState.base.y, TOWER.LIGHTER);
+    lastFrameTime = performance.now();
+    camera.zoom = 1;
+    camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
+    camera.y = (gameState.base.y + 0.5) * TILE_SIZE - (CANVAS_H / 2);
+}
+
+function updateCamera(dt) {
+    const moveSpeed = camera.speed * dt / camera.zoom;
+    if (keys['w']) camera.y -= moveSpeed;
+    if (keys['s']) camera.y += moveSpeed;
+    if (keys['a']) camera.x -= moveSpeed;
+    if (keys['d']) camera.x += moveSpeed;
+    if (keys['q']) camera.zoom *= (1 + dt);
+    if (keys['e']) camera.zoom *= (1 - dt);
+    camera.zoom = Math.max(0.3, Math.min(camera.zoom, 4));
+}
+
+function screenToWorld(sx, sy) {
+    const worldX = sx / camera.zoom + camera.x;
+    const worldY = sy / camera.zoom + camera.y;
+    return { x: Math.floor(worldX / TILE_SIZE), y: Math.floor(worldY / TILE_SIZE) };
+}
+
+function handleMouseMove(ev) {
+    const rect = canvas.getBoundingClientRect();
+    const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+    gameState.hoveredTower = gameState.towers.find(t => t.x === worldCoords.x && t.y === worldCoords.y) || null;
+}
 
 canvas.addEventListener('mousemove', handleMouseMove);
 canvas.addEventListener('click', (ev) => {
@@ -78,6 +109,24 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
-window.addEventListener('resize', () => { /* ... no changes ... */ });
-async function startGame() { /* ... no changes ... */ }
+
+window.addEventListener('resize', () => {
+    updateCanvasSize();
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+});
+
+async function startGame() {
+    const hud = document.getElementById('hud');
+    try {
+        hud.innerHTML = 'Loading assets...';
+        await loadAssets();
+        initGame(false);
+        animationFrameId = requestAnimationFrame(gameLoop);
+    } catch (error) {
+        console.error("Could not start game:", error);
+        hud.innerHTML = `<strong>Error:</strong> Could not load game assets. Please check the console (F12) for details.`;
+    }
+}
+
 startGame();
