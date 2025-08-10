@@ -3,7 +3,9 @@
 export const assets = {};
 
 const assetList = [
-    { name: 'gemMine', src: '/media/gemMine.png' }
+    { name: 'gemMine', src: '/media/gemMine.png' },
+    // ADDED: New asset for the Lighter Tower
+    { name: 'lightTower', src: '/media/lightTower.png' }
 ];
 
 let assetsLoaded = 0;
@@ -31,7 +33,7 @@ export function loadAssets() {
             };
             img.onerror = () => {
                 console.error(`Failed to load asset: ${assetInfo.name} at ${assetInfo.src}`);
-                onAssetLoad();
+                onAssetLoad(); // Continue even if an asset fails
             }
         });
     });
