@@ -1,17 +1,12 @@
-// js/assets.js
+// js/assets.js (Corrected)
 
 // This object will hold all our loaded images
 export const assets = {};
 
 // A list of all assets we want to load
 const assetList = [
-    { name: 'gemMine', src: 'media/gemMine.png' },
-
-    // PREPARATION: Adding placeholders for future sprites.
-    // The game will show an error for these until you create and add the images.
-    // { name: 'basicTower', src: 'media/basicTower.png' },
-    // { name: 'lighterTower', src: 'media/lighterTower.png' },
-    // { name: 'enemy', src: 'media/enemy.png' },
+    // FIX: Corrected path to be relative to the index.html file
+    { name: 'gemMine', src: 'moomooclone/media/gemMine.png' }
 ];
 
 let assetsLoaded = 0;
