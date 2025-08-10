@@ -1,6 +1,6 @@
 // js/drawing.js
 
-import { TILE_SIZE, CHUNK_SIZE, CANVAS_W, CANVAS_H, GUI_CONFIG, HOTBAR_TOWERS, COST, TOWER, TOWER_RANGES } from './config.js';
+import { TILE_SIZE, CHUNK_SIZE, CANVAS_W, CANVAS_H, GUI_CONFIG, HOTBAR_TOWERS, COST, TOWER, TOWER_RANGES, ENEMY_TYPE } from './config.js';
 import { camera, gameState, guiState, GAME_SEED } from './state.js';
 import { getChunk } from './world.js';
 import { assets } from './assets.js';
@@ -50,33 +50,21 @@ export function drawGrid(ctx) {
     });
 }
 
-// UPDATED: Renders a nice energy beam for supply lines
 function drawSupplyLines(ctx) {
-    const pulse = 0.6 + Math.sin(gameState.animationTimer * 5) * 0.4; // Fast, sharp pulse
-
+    const pulse = 0.6 + Math.sin(gameState.animationTimer * 5) * 0.4;
     for(const t of gameState.towers) {
         if(t.isPowered && t.powerSource) {
             const startX = (t.x + 0.5) * TILE_SIZE;
             const startY = (t.y + 0.5) * TILE_SIZE;
             const endX = (t.powerSource.x + 0.5) * TILE_SIZE;
             const endY = (t.powerSource.y + 0.5) * TILE_SIZE;
-
-            // Outer glow
             ctx.lineCap = 'round';
             ctx.strokeStyle = `rgba(180, 150, 255, ${pulse * 0.3})`;
             ctx.lineWidth = 10;
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-
-            // Inner core
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
             ctx.strokeStyle = `rgba(220, 200, 255, ${pulse * 0.8})`;
             ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
         }
     }
 }
@@ -100,9 +88,7 @@ export function drawTowers(ctx) {
                 ctx.rotate(t.angle + Math.PI / 2);
                 ctx.drawImage(assets.basicTower, -size / 2, -size / 2, size, size);
                 ctx.restore();
-            } else {
-                ctx.fillStyle = 'blue'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
-            }
+            } else { ctx.fillStyle = 'blue'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill(); }
         } else if (t.type === TOWER.LIGHTER) {
             if (assets.lightTower) ctx.drawImage(assets.lightTower, cx - size / 2, cy - size / 2, size, size);
             else { ctx.fillStyle = 'gold'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill(); }
@@ -110,10 +96,8 @@ export function drawTowers(ctx) {
             if (assets.gemMine) ctx.drawImage(assets.gemMine, cx - size / 2, cy - size / 2, size, size);
             else { ctx.fillStyle = 'green'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.28, 0, Math.PI * 2); ctx.fill(); }
         } else if (t.type === TOWER.SUPPLY) {
-            // UPDATED: Use the sprite for the supply tower
-            if (assets.supplyRelayIcon) {
-                 ctx.drawImage(assets.supplyRelayIcon, cx - size / 2, cy - size / 2, size, size);
-            } else {
+            if (assets.supplyRelayIcon) ctx.drawImage(assets.supplyRelayIcon, cx - size / 2, cy - size / 2, size, size);
+            else {
                 ctx.fillStyle = t.isPowered ? '#d4a3ff' : '#6b5380';
                 ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.35, 0, Math.PI * 2); ctx.fill();
             }
@@ -142,8 +126,7 @@ export function drawHoverOverlay(ctx) {
     else ctx.fillText(`${Math.ceil(t.hp)} / ${t.maxHp}`, cx, cy - TILE_SIZE * 0.8);
     const range = (t.range > 0 ? t.range : t.supplyRange) * TILE_SIZE;
     if (range > 0) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; ctx.lineWidth = 2;
         ctx.setLineDash([8, 12]);
         ctx.lineDashOffset = -gameState.animationTimer * 50;
         ctx.beginPath(); ctx.arc(cx, cy, range, 0, Math.PI * 2); ctx.stroke();
@@ -190,11 +173,42 @@ export function drawEnemies(ctx) {
     for (const e of gameState.enemies) {
         const cx = e.x * TILE_SIZE;
         const cy = e.y * TILE_SIZE;
-        ctx.fillStyle = 'crimson';
-        ctx.fillRect(cx - 10, cy - 10, 20, 20);
+        switch(e.type) {
+            case ENEMY_TYPE.RUSHER:
+                ctx.fillStyle = '#f0e68c';
+                ctx.fillRect(cx - 8, cy - 8, 16, 16);
+                break;
+            case ENEMY_TYPE.TANK:
+                ctx.fillStyle = '#696969';
+                ctx.fillRect(cx - 12, cy - 12, 24, 24);
+                break;
+            case ENEMY_TYPE.EXPLODER:
+                const pulse = 0.8 + Math.sin(gameState.animationTimer * 10) * 0.2;
+                ctx.fillStyle = `rgba(255, 140, 0, ${pulse})`;
+                ctx.beginPath(); ctx.arc(cx, cy, 10 * pulse, 0, Math.PI * 2); ctx.fill();
+                break;
+            default:
+                ctx.fillStyle = 'crimson';
+                ctx.fillRect(cx - 10, cy - 10, 20, 20);
+                break;
+        }
         const hpFrac = Math.max(0, e.hp) / e.maxHp;
         ctx.fillStyle = '#222'; ctx.fillRect(cx - 12, cy - 16, 24, 4);
         ctx.fillStyle = '#0f0'; ctx.fillRect(cx - 12, cy - 16, 24 * hpFrac, 4);
+    }
+}
+
+export function drawEffects(ctx) {
+    for (const effect of gameState.effects) {
+        if (effect.type === 'explosion') {
+            const progress = 1 - (effect.life / effect.maxLife);
+            const currentRadius = effect.radius * progress * TILE_SIZE;
+            const alpha = effect.life / effect.maxLife;
+            ctx.fillStyle = `rgba(255, 165, 0, ${alpha * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(effect.x * TILE_SIZE, effect.y * TILE_SIZE, currentRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 }
 
