@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Maze TD - Infinite with Camera Controls</title>
+  <title>Maze TD - Infinite & Dynamic Spawns</title>
   <style>
     body { background:#111; color:#ddd; font-family: sans-serif; display:flex; flex-direction:column; align-items:center; padding:12px; margin: 0; overflow: hidden; }
     canvas { background:#000; image-rendering: crisp-edges; border:4px solid #222; }
@@ -11,22 +11,23 @@
   </style>
 </head>
 <body>
-  <h2 style="color:white">Maze Tower Defense — Infinite with Camera Controls</h2>
+  <h2 style="color:white">Maze Tower Defense — Infinite & Dynamic Spawns</h2>
   <canvas id="game"></canvas>
   <div class="info">
     <div id="hud"></div>
-    <div class="hint">Keys: 1=Basic, 2=Lighter, 3=Mine, R=random seed. WASD to move camera, Q/E to zoom. Click to place towers on revealed path tiles.</div>
+    <div class="hint">Keys: 1=Basic, 2=Lighter, 3=Mine, R=random seed. WASD to move camera, Q/E to zoom.</div>
   </div>
 
 <script>
 (() => {
   // ---------- Config ----------
   let TILE = 32;
-  let COLS = 25;
-  let ROWS = 25;
+  let COLS = 30;
+  let ROWS = 30;
   let CANVAS_W = window.innerWidth - 30;
   let CANVAS_H = window.innerHeight - 150;
-  const spawnIntervalMs = 1800;
+  const spawnIntervalMs = 1700;
+  const EXPANSION_AMOUNT = 15;
 
   const COST = { basic: 20, lighter: 30, mine: 50 };
   const TOWER = { BASIC: 'basic', LIGHTER: 'lighter', MINE: 'mine' };
@@ -37,24 +38,10 @@
   canvas.height = CANVAS_H;
   const ctx = canvas.getContext('2d');
 
-  let gems = 120, lives = 10;
-  let maze = [];
-  let fog = [];
-  let gemNode = [];
-  let generated = [];
-  let towers = [];
-  let enemies = [];
-  let projectiles = [];
+  let gems, lives, maze, fog, gemNode, generated, towers, enemies, projectiles, spawnPoints, base;
   let lastSpawn = 0;
-  let base = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
-  let spawnPoint = { x: 0, y: Math.floor(ROWS/2) };
 
-  const camera = {
-    x: 0,
-    y: 0,
-    zoom: 1,
-    speed: 400
-  };
+  const camera = { x: 0, y: 0, zoom: 1, speed: 400 };
   const keys = {};
 
   function mulberry32(a) {
@@ -86,90 +73,116 @@
   function initGrid(rows, cols) {
     ROWS = rows;
     COLS = cols;
-    maze = Array.from({length: rows}, () => Array(cols).fill(null));
-    fog = Array.from({length: rows}, () => Array(cols).fill(true));
-    gemNode = Array.from({length: rows}, () => Array(cols).fill(false));
-    generated = Array.from({length: rows}, () => Array(cols).fill(false));
+    maze = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    fog = Array.from({length: ROWS}, () => Array(COLS).fill(true));
+    gemNode = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+    generated = Array.from({length: ROWS}, () => Array(COLS).fill(false));
   }
 
-    function expandWorld(top, right, bottom, left) {
-        const expansionAmount = 15;
-        if (top) {
-            const add = Array.from({length: expansionAmount}, () => Array(COLS).fill(null));
-            maze.unshift(...add);
-            fog.unshift(...add);
-            gemNode.unshift(...add);
-            generated.unshift(...add);
-            ROWS += expansionAmount;
-            const shift = expansionAmount;
-            base.y += shift;
-            spawnPoint.y += shift;
-            towers.forEach(t => t.y += shift);
-            enemies.forEach(e => {
-                e.y += shift;
-                e.path.forEach(p => p.y += shift);
-            });
-            projectiles.forEach(p => p.y += shift);
-            camera.y += shift * TILE;
+    function expandWorld(expandTop, expandRight, expandBottom, expandLeft) {
+        let shiftX = 0, shiftY = 0;
+
+        if (expandTop) {
+            shiftY = EXPANSION_AMOUNT;
+            const newRows = Array.from({ length: EXPANSION_AMOUNT }, () => Array(COLS).fill(null));
+            maze.unshift(...newRows);
+            fog.unshift(...newRows.map(r => r.map(() => true)));
+            gemNode.unshift(...newRows);
+            generated.unshift(...newRows);
+            ROWS += EXPANSION_AMOUNT;
         }
-        if (bottom) {
-             const add = Array.from({length: expansionAmount}, () => Array(COLS).fill(null));
-            maze.push(...add);
-            fog.push(...add);
-            gemNode.push(...add);
-            generated.push(...add);
-            ROWS += expansionAmount;
+        if (expandBottom) {
+            const newRows = Array.from({ length: EXPANSION_AMOUNT }, () => Array(COLS).fill(null));
+            maze.push(...newRows);
+            fog.push(...newRows.map(r => r.map(() => true)));
+            gemNode.push(...newRows);
+            generated.push(...newRows);
+            ROWS += EXPANSION_AMOUNT;
         }
-        if (left) {
+        if (expandLeft) {
+            shiftX = EXPANSION_AMOUNT;
             for (let y = 0; y < ROWS; y++) {
-                for(let i=0; i<expansionAmount; i++) {
-                    maze[y].unshift(null);
-                    fog[y].unshift(true);
-                    gemNode[y].unshift(false);
-                    generated[y].unshift(false);
-                }
+                const newCells = Array(EXPANSION_AMOUNT).fill(null);
+                maze[y].unshift(...newCells);
+                fog[y].unshift(...Array(EXPANSION_AMOUNT).fill(true));
+                gemNode[y].unshift(...newCells);
+                generated[y].unshift(...newCells);
             }
-            COLS += expansionAmount;
-            const shift = expansionAmount;
-            base.x += shift;
-            spawnPoint.x += shift;
-            towers.forEach(t => t.x += shift);
+            COLS += EXPANSION_AMOUNT;
+        }
+        if (expandRight) {
+             for (let y = 0; y < ROWS; y++) {
+                const newCells = Array(EXPANSION_AMOUNT).fill(null);
+                maze[y].push(...newCells);
+                fog[y].push(...Array(EXPANSION_AMOUNT).fill(true));
+                gemNode[y].push(...newCells);
+                generated[y].push(...newCells);
+            }
+            COLS += EXPANSION_AMOUNT;
+        }
+
+        if (shiftX > 0 || shiftY > 0) {
+            base.x += shiftX; base.y += shiftY;
+            towers.forEach(t => { t.x += shiftX; t.y += shiftY; });
             enemies.forEach(e => {
-                e.x += shift;
-                e.path.forEach(p => p.x += shift);
+                e.x += shiftX; e.y += shiftY;
+                e.path.forEach(p => { p.x += shiftX; p.y += shiftY; });
             });
-            projectiles.forEach(p => p.x += shift);
-            camera.x += shift * TILE;
+            projectiles.forEach(p => { p.x += shiftX; p.y += shiftY; });
+            spawnPoints.forEach(sp => { sp.x += shiftX; sp.y += shiftY; });
+            camera.x += shiftX * TILE;
+            camera.y += shiftY * TILE;
         }
-        if (right) {
-            for (let y = 0; y < ROWS; y++) {
-                 for(let i=0; i<expansionAmount; i++) {
-                    maze[y].push(null);
-                    fog[y].push(true);
-                    gemNode[y].push(false);
-                    generated[y].push(false);
-                }
-            }
-            COLS += expansionAmount;
-        }
+
+        if (expandTop) findAndAddSpawnPoints('top');
+        if (expandRight) findAndAddSpawnPoints('right');
+        if (expandBottom) findAndAddSpawnPoints('bottom');
+        if (expandLeft) findAndAddSpawnPoints('left');
     }
 
+  function findAndAddSpawnPoints(edge) {
+      let potentialSpawns = [];
+      const minSpawnDist = 10;
+
+      let xStart=0, xEnd=COLS, yStart=0, yEnd=ROWS;
+      if(edge === 'top') { yEnd = EXPANSION_AMOUNT; }
+      else if(edge === 'bottom') { yStart = ROWS - EXPANSION_AMOUNT; }
+      else if(edge === 'left') { xEnd = EXPANSION_AMOUNT; }
+      else if(edge === 'right') { xStart = COLS - EXPANSION_AMOUNT; }
+
+      for(let y = yStart; y < yEnd; y++) {
+          for(let x = xStart; x < xEnd; x++) {
+              if(!generated[y][x]) {
+                  const det = deterministicTile(x,y);
+                  maze[y][x] = det.tile;
+                  gemNode[y][x] = det.gem;
+                  generated[y][x] = true;
+              }
+              if(maze[y][x] === 0) { // Is a path
+                  let tooClose = false;
+                  for(const sp of spawnPoints) {
+                      if(Math.hypot(sp.x - x, sp.y - y) < minSpawnDist) {
+                          tooClose = true;
+                          break;
+                      }
+                  }
+                  if(!tooClose) potentialSpawns.push({x,y});
+              }
+          }
+      }
+
+      potentialSpawns = potentialSpawns.filter(sp => findPath(sp, base) !== null);
+      if(potentialSpawns.length > 0) {
+        spawnPoints.push(potentialSpawns[Math.floor(rng() * potentialSpawns.length)]);
+      }
+  }
 
   function deterministicTile(x,y) {
     const h = (GAME_SEED ^ (x*374761393) ^ (y*668265263)) >>> 0;
     const cellRng = mulberry32(h);
-    const isWall = cellRng() < 0.25 ? 1 : 0;
+    const isWall = cellRng() < 0.28 ? 1 : 0;
     const hasGemNode = (!isWall) && (cellRng() < 0.12);
     return { tile: isWall, gem: hasGemNode };
-  }
-
-  function generateInitialNeighborhood() {
-    generateAreaAround(base.x, base.y, 3);
-    spawnPoint.x = rng() < 0.5 ? 0 : COLS-1;
-    spawnPoint.y = Math.floor(rng()*ROWS);
-    generateAreaAround(spawnPoint.x, spawnPoint.y, 2);
-    maze[base.y][base.x] = 0; generated[base.y][base.x] = true; fog[base.y][base.x] = false;
-    maze[spawnPoint.y][spawnPoint.x] = 0; generated[spawnPoint.y][spawnPoint.x] = true; fog[spawnPoint.y][spawnPoint.x] = false;
   }
 
   function generateAreaAround(cx, cy, radius) {
@@ -190,10 +203,7 @@
       for (let x = cx - radius; x <= cx + radius; x++) {
         if (inBounds(x,y)) {
           if (!generated[y][x]) {
-            const det = deterministicTile(x,y);
-            maze[y][x] = det.tile;
-            gemNode[y][x] = det.gem;
-            generated[y][x] = true;
+            generateAreaAround(x, y, 1);
           }
           fog[y][x] = false;
         }
@@ -205,13 +215,11 @@
   }
 
   function findPath(start, goal) {
-    if (!inBounds(start.x,start.y) || !inBounds(goal.x,goal.y)) return null;
-    if (maze[goal.y][goal.x] !== 0) return null;
-    const q = [];
+    if (!inBounds(start.x,start.y) || !inBounds(goal.x,goal.y) || maze[goal.y][goal.x] !== 0) return null;
+    const q = [{x:start.x,y:start.y}];
     const visited = Array.from({length:ROWS}, () => Array(COLS).fill(false));
-    const prev = Array.from({length:ROWS}, () => Array(COLS).fill(null));
-    q.push({x:start.x,y:start.y});
     visited[start.y][start.x] = true;
+    const prev = new Map();
     const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
     while (q.length) {
       const cur = q.shift();
@@ -219,16 +227,16 @@
         const path = [];
         let p = cur;
         while (p) {
-          path.push({x:p.x,y:p.y});
-          p = prev[p.y][p.x];
+          path.unshift({x:p.x,y:p.y});
+          p = prev.get(`${p.x},${p.y}`);
         }
-        return path.reverse();
+        return path;
       }
       for (const d of dirs) {
         const nx = cur.x + d[0], ny = cur.y + d[1];
         if (inBounds(nx,ny) && !visited[ny][nx] && maze[ny][nx] === 0) {
           visited[ny][nx] = true;
-          prev[ny][nx] = cur;
+          prev.set(`${nx},${ny}`, cur);
           q.push({x:nx,y:ny});
         }
       }
@@ -239,12 +247,11 @@
   function inBounds(x,y) { return x>=0 && x<COLS && y>=0 && y<ROWS; }
 
   function canPlaceTower(x,y,type) {
-    if (!inBounds(x,y)) return false;
-    if (!generated[y][x] || fog[y][x]) return false;
-    if (maze[y][x] === 1) return false;
+    if (!inBounds(x,y) || !generated[y][x] || fog[y][x] || maze[y][x] === 1) return false;
     if (towers.some(t => t.x===x && t.y===y)) return false;
     if (type === TOWER.MINE && !gemNode[y][x]) return false;
-    if (x===spawnPoint.x && y===spawnPoint.y) return false;
+    if (spawnPoints.some(sp => sp.x===x && sp.y===y)) return false;
+    if (x === base.x && y === base.y) return false;
     return true;
   }
 
@@ -253,14 +260,7 @@
     const cost = COST[type];
     if (gems < cost) return;
     gems -= cost;
-    const tower = {
-      x, y, type,
-      cooldown: 0,
-      fireRate: type===TOWER.BASIC ? 0.6 : 2.0,
-      range: type===TOWER.BASIC ? 3.2 : 0,
-      angle: 0,
-      mineTimer: 0
-    };
+    const tower = { x, y, type, cooldown: 0, fireRate: type===TOWER.BASIC ? 0.6 : 2.0, range: type===TOWER.BASIC ? 3.2 : 0, angle: 0, mineTimer: 0 };
     towers.push(tower);
     if (type === TOWER.LIGHTER) {
       revealArea(x,y,4);
@@ -268,19 +268,12 @@
   }
 
   function spawnEnemy() {
-    generateAreaAround(spawnPoint.x, spawnPoint.y, 4);
+    if (spawnPoints.length === 0) return;
+    const spawnPoint = spawnPoints[Math.floor(rng() * spawnPoints.length)];
     const path = findPath(spawnPoint, base);
     if (!path) return;
-    const maxHp = 20 + Math.floor(rng()*15);
-    enemies.push({
-      path,
-      idx: 0,
-      x: path[0].x + 0.5,
-      y: path[0].y + 0.5,
-      speed: 1.2 + rng() * 0.5,
-      hp: maxHp,
-      maxHp: maxHp
-    });
+    const maxHp = 20 + Math.floor(rng()*20) + Math.floor(lastFrameTime/30000); // Scale with time
+    enemies.push({ path, idx: 0, x: path[0].x + 0.5, y: path[0].y + 0.5, speed: 1.2 + rng() * 0.6, hp: maxHp, maxHp });
   }
 
   function recomputeEnemyPath(e) {
@@ -330,14 +323,10 @@
           const ty = target.y - (t.y + 0.5);
           const desired = Math.atan2(ty, tx);
           const diff = normalizeAngle(desired - t.angle);
-          const rotSpeed = 6.0 * dt;
+          const rotSpeed = 7.0 * dt;
           t.angle += Math.sign(diff) * Math.min(Math.abs(diff), rotSpeed);
-          if (t.cooldown <= 0) {
-            projectiles.push({
-              x: t.x + 0.5, y: t.y + 0.5,
-              vx: Math.cos(t.angle) * 8.0, vy: Math.sin(t.angle) * 8.0,
-              target: target, life: 1.2
-            });
+          if (t.cooldown <= 0 && Math.abs(diff) < 0.1) {
+            projectiles.push({ x: t.x + 0.5, y: t.y + 0.5, vx: Math.cos(t.angle) * 8.0, vy: Math.sin(t.angle) * 8.0, target: target, life: 1.2 });
             t.cooldown = t.fireRate;
           }
         } else {
@@ -372,22 +361,16 @@
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       if (p.target && p.target.hp > 0 && Math.hypot(p.x - p.target.x, p.y - p.target.y) < 0.5) {
-        p.target.hp -= 6;
+        p.target.hp -= 7;
         projectiles.splice(i,1);
         continue;
       }
-      if (p.life <= 0) projectiles.splice(i,1);
+      if (p.life <= 0 || (p.target && p.target.hp <=0)) projectiles.splice(i,1);
     }
   }
 
   function drawGrid() {
-        const view = {
-            x: camera.x,
-            y: camera.y,
-            w: CANVAS_W,
-            h: CANVAS_H
-        };
-        const TILE_ZOOMED = TILE * camera.zoom;
+        const view = { x: camera.x, y: camera.y, w: CANVAS_W, h: CANVAS_H };
         const startCol = Math.floor(view.x / TILE);
         const endCol = Math.ceil((view.x + view.w / camera.zoom) / TILE);
         const startRow = Math.floor(view.y / TILE);
@@ -420,6 +403,13 @@
         ctx.fillRect(base.x * TILE, base.y * TILE, TILE, TILE);
         ctx.fillStyle = '#222';
         ctx.fillRect(base.x * TILE + 6, base.y * TILE + 6, TILE - 12, TILE - 12);
+
+        spawnPoints.forEach(sp => {
+            ctx.fillStyle = 'rgba(150, 0, 0, 0.7)';
+            ctx.fillRect(sp.x * TILE, sp.y * TILE, TILE, TILE);
+            ctx.strokeStyle = 'red';
+            ctx.strokeRect(sp.x*TILE + 4, sp.y*TILE+4, TILE-8, TILE-8);
+        });
     }
 
   function drawTowers() {
@@ -457,7 +447,6 @@
       const cy = e.y * TILE;
       ctx.fillStyle = 'crimson';
       ctx.fillRect(cx - 10, cy - 10, 20, 20);
-      // FIX: Use maxHp for stable health bar
       const hpFrac = Math.max(0, e.hp) / e.maxHp;
       ctx.fillStyle = '#222';
       ctx.fillRect(cx - 12, cy - 16, 24, 4);
@@ -481,7 +470,6 @@
   }
 
   function screenToWorld(x, y) {
-        // FIX: Corrected the math for screen to world transformation
         const worldX = (x / camera.zoom) + camera.x;
         const worldY = (y / camera.zoom) + camera.y;
         return { x: worldX, y: worldY };
@@ -489,12 +477,8 @@
 
   canvas.addEventListener('click', (ev) => {
         const rect = canvas.getBoundingClientRect();
-        const mx = ev.clientX - rect.left;
-        const my = ev.clientY - rect.top;
-        const worldCoords = screenToWorld(mx, my);
-        const gx = Math.floor(worldCoords.x / TILE);
-        const gy = Math.floor(worldCoords.y / TILE);
-        placeTower(gx, gy, selectedTower);
+        const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+        placeTower(Math.floor(worldCoords.x / TILE), Math.floor(worldCoords.y / TILE), selectedTower);
     });
 
   document.addEventListener('keydown', (e) => {
@@ -503,8 +487,7 @@
     else if (e.key === '2') selectedTower = TOWER.LIGHTER;
     else if (e.key === '3') selectedTower = TOWER.MINE;
     else if (e.key.toLowerCase() === 'r') {
-      const newSeed = Math.floor(Math.random()*0x7fffffff);
-      setSeed(newSeed);
+      setSeed(Math.floor(Math.random()*0x7fffffff));
     }
   });
 
@@ -519,18 +502,16 @@
 
         updateCamera(dt);
         
-        // FIX: Moved world expansion logic before any updates or drawing
         const view = { x: camera.x, y: camera.y, w: CANVAS_W, h: CANVAS_H };
-        const TILE_ZOOMED = TILE * camera.zoom;
         const startCol = Math.floor(view.x / TILE);
         const endCol = Math.ceil((view.x + view.w / camera.zoom) / TILE);
         const startRow = Math.floor(view.y / TILE);
         const endRow = Math.ceil((view.y + view.h / camera.zoom) / TILE);
         
-        if (startCol < 2) expandWorld(false, false, false, true);
-        if (endCol > COLS - 2) expandWorld(false, true, false, false);
-        if (startRow < 2) expandWorld(true, false, false, false);
-        if (endRow > ROWS - 2) expandWorld(false, false, true, false);
+        if (startCol < 5) expandWorld(false, false, false, true);
+        if (endCol > COLS - 5) expandWorld(false, true, false, false);
+        if (startRow < 5) expandWorld(true, false, false, false);
+        if (endRow > ROWS - 5) expandWorld(false, false, true, false);
 
         lastSpawn += dt * 1000;
         if (lastSpawn >= spawnIntervalMs) {
@@ -568,42 +549,47 @@
     }
 
   function updateCamera(dt) {
-    if (keys['w']) camera.y -= camera.speed * dt / camera.zoom;
-    if (keys['s']) camera.y += camera.speed * dt / camera.zoom;
-    if (keys['a']) camera.x -= camera.speed * dt / camera.zoom;
-    if (keys['d']) camera.x += camera.speed * dt / camera.zoom;
+    const moveSpeed = camera.speed * dt / camera.zoom;
+    if (keys['w']) camera.y -= moveSpeed;
+    if (keys['s']) camera.y += moveSpeed;
+    if (keys['a']) camera.x -= moveSpeed;
+    if (keys['d']) camera.x += moveSpeed;
     if (keys['q']) camera.zoom *= (1 + dt);
     if (keys['e']) camera.zoom *= (1 - dt);
     camera.zoom = Math.max(0.3, Math.min(camera.zoom, 4));
   }
 
   function initGame(reseed=false) {
-    if (!reseed) {
-      GAME_SEED = parseSeed();
-    }
+    if (!reseed) GAME_SEED = parseSeed();
     rng = mulberry32(GAME_SEED);
 
-    COLS = 25;
-    ROWS = 25;
+    initGrid(30, 30);
     base = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
     
-    gems = 120; lives = 10; towers = []; enemies = []; projectiles = [];
-    initGrid(ROWS, COLS);
-    generateInitialNeighborhood();
+    gems = 150; lives = 15; towers = []; enemies = []; projectiles = []; spawnPoints = [];
     
-    // Place initial tower at base (must be after towers array is cleared)
-    placeTower(base.x, base.y, TOWER.LIGHTER);
+    generateAreaAround(base.x, base.y, 4);
+    revealArea(base.x, base.y, 3);
+    
+    findAndAddSpawnPoints('top');
+    findAndAddSpawnPoints('left');
+    
+    placeTower(base.x+1, base.y, TOWER.LIGHTER);
 
     lastFrameTime = performance.now();
     lastSpawn = 0;
 
     camera.zoom = 1;
-    // Center camera on the base's center
-    camera.x = (base.x + 0.5) * TILE - (CANVAS_W / 2 / camera.zoom);
-    camera.y = (base.y + 0.5) * TILE - (CANVAS_H / 2 / camera.zoom);
+    camera.x = (base.x + 0.5) * TILE - (CANVAS_W / 2);
+    camera.y = (base.y + 0.5) * TILE - (CANVAS_H / 2);
   }
 
-  window.__td = { setSeed, getSeed: () => GAME_SEED, rng, maze, fog, gemNode, towers, enemies };
+  window.addEventListener('resize', () => {
+    CANVAS_W = window.innerWidth - 30;
+    CANVAS_H = window.innerHeight - 150;
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+  });
 
   initGame(false);
   requestAnimationFrame(gameLoop);
