@@ -24,7 +24,6 @@ function worldToChunkCoords(worldX, worldY) {
 function deterministicTile(x, y) {
     const h = (GAME_SEED ^ (x * 374761393) ^ (y * 668265263)) >>> 0;
     const cellRng = mulberry32(h);
-    // UPDATED: Increased wall probability for more maze-like structures
     const isWall = cellRng() < 0.33;
     const hasGem = cellRng() < 0.12;
     return { tile: isWall ? 1 : 0, gem: !isWall && hasGem };
@@ -83,6 +82,9 @@ export function revealArea(worldX, worldY, radius) {
 }
 
 function scanForNewSpawner(x, y) {
+    // UPDATED: Respect the grace period flag
+    if (!gameState.allowSpawners) return;
+
     let isEdgeOfDarkness = false;
     for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (getTile(x + d[0], y + d[1]).isFoggy) {
