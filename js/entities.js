@@ -11,16 +11,16 @@ function normalizeAngle(a) {
 }
 
 function updateSupplyNetwork() {
-    gameState.towers.forEach(t => { if (t.type === TOWER.SUPPLY) t.isPowered = false; });
+    gameState.towers.forEach(t => { if (t.type === TOWER.SUPPLY) { t.isPowered = false; t.powerSource = null; } });
     const queue = [gameState.base];
-    const visited = new Set([`${gameState.base.x},${gameState.base.y}`]);
-    while (queue.length > 0) {
+    while(queue.length > 0) {
         const source = queue.shift();
         const sourceRange = source.supplyRange || 0;
         for (const relay of gameState.towers) {
             if (relay.type === TOWER.SUPPLY && !relay.isPowered && !relay.isConstructing) {
                 if (Math.hypot(relay.x - source.x, relay.y - source.y) <= sourceRange) {
                     relay.isPowered = true;
+                    relay.powerSource = source;
                     queue.push(relay);
                 }
             }
@@ -28,28 +28,27 @@ function updateSupplyNetwork() {
     }
 }
 
-function canPlaceTower(x, y, type) {
+export function canPlaceTower(x, y) {
     const tile = world.getTile(x, y);
     if (tile.isFoggy || tile.tile === 1 || gameState.towers.some(t => t.x === x && t.y === y)) return false;
-    if (type === TOWER.MINE && !tile.hasGemNode) return false;
+    if (gameState.selectedTower === TOWER.MINE && !tile.hasGemNode) return false;
     if (x === gameState.base.x && y === gameState.base.y) return false;
-
     const sources = [gameState.base, ...gameState.towers.filter(t => t.type === TOWER.SUPPLY && t.isPowered)];
-    for (const source of sources) {
+    for(const source of sources) {
         if (Math.hypot(x - source.x, y - source.y) <= source.supplyRange) return true;
     }
     return false;
 }
 
 export function placeTower(x, y, type) {
-    if (!canPlaceTower(x, y, type) || gameState.gems < COST[type]) return;
+    if (!canPlaceTower(x, y) || gameState.gems < COST[type]) return;
     gameState.gems -= COST[type];
     const tower = {
         x, y, type, cooldown: 0,
         fireRate: type === TOWER.BASIC ? 0.6 : 2.0,
         range: type === TOWER.BASIC ? 3.2 : 0,
         supplyRange: type === TOWER.SUPPLY ? 7 : 0,
-        isPowered: false, angle: 0, mineTimer: 0,
+        isPowered: false, angle: 0, mineTimer: 0, powerSource: null,
         hp: 100, maxHp: 100,
         isConstructing: true, buildProgress: 0,
     };
@@ -145,6 +144,7 @@ export function updateEnemies(dt) {
 
         if (!e.target || e.target.hp <= 0) {
             e.target = findClosestTarget(e);
+            e.path = world.findPath(e, e.target);
         }
 
         const targetPos = { x: e.target.x + 0.5, y: e.target.y + 0.5 };
@@ -159,14 +159,21 @@ export function updateEnemies(dt) {
                 }
             }
         } else {
-            const path = world.findPath(e, e.target);
-            if (path && path.length > 0) {
-                const nextNode = path[0];
+            if (e.path && e.path.length > 0) {
+                const nextNode = e.path[0];
                 const tx = nextNode.x + 0.5, ty = nextNode.y + 0.5;
                 const distToNode = Math.hypot(tx - e.x, ty - e.y);
                 const move = e.speed * dt;
-                e.x += (tx - e.x) / distToNode * move;
-                e.y += (ty - e.y) / distToNode * move;
+                if (distToNode < move) {
+                    e.x = tx;
+                    e.y = ty;
+                    e.path.shift();
+                } else {
+                    e.x += (tx - e.x) / distToNode * move;
+                    e.y += (ty - e.y) / distToNode * move;
+                }
+            } else if (!e.path) {
+                e.path = world.findPath(e, e.target);
             }
         }
     }
