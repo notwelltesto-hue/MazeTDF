@@ -1,12 +1,12 @@
 {
-  "name": "Maze-TDF",
+  "name": "maze-td-game",
   "version": "1.0.0",
-  "description": "A tower defense game.",
+  "description": "A modular tower defense game.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.18.2"
   }
 }
