@@ -1,4 +1,4 @@
-// js/world.js
+// js/world.js (Corrected)
 
 import { CHUNK_SIZE } from './config.js';
 import { GAME_SEED, gameState, rng } from './state.js';
@@ -47,7 +47,8 @@ function generateChunk(cx, cy) {
     return chunk;
 }
 
-function getChunk(cx, cy) {
+// FIX: Added 'export' so other modules can use this function.
+export function getChunk(cx, cy) {
     const key = `${cx},${cy}`;
     if (!gameState.chunks.has(key)) {
         gameState.chunks.set(key, generateChunk(cx, cy));
