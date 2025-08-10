@@ -34,14 +34,12 @@ function gameLoop(now) {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.scale(camera.zoom, camera.zoom);
     ctx.translate(-camera.x, -camera.y);
-
     drawing.drawGrid(ctx);
     drawing.drawTowers(ctx);
     drawing.drawEnemies(ctx);
     drawing.drawProjectiles(ctx);
     drawing.drawHoverOverlay(ctx);
     drawing.drawPlacementPreview(ctx);
-
     ctx.restore();
     drawing.drawHUD();
 
@@ -59,7 +57,9 @@ function initGame(reseed = false) {
     resetState();
     // Start with a small revealed area around the base
     world.revealArea(gameState.base.x, gameState.base.y, 2);
-    // Spawners will now appear organically as the player explores.
+    // UPDATED: Now that the initial reveal is done, allow spawners to be created.
+    gameState.allowSpawners = true;
+
     lastFrameTime = performance.now();
     camera.zoom = 1;
     camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
@@ -123,16 +123,28 @@ window.addEventListener('resize', () => {
     canvas.height = CANVAS_H;
 });
 
+// UPDATED: StartGame function now handles the loading bar
 async function startGame() {
-    const hud = document.getElementById('hud');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingBar = document.getElementById('loading-bar');
+
     try {
-        hud.innerHTML = 'Loading assets...';
-        await loadAssets();
+        const onProgress = (progress) => {
+            loadingBar.style.width = `${progress * 100}%`;
+        };
+        await loadAssets(onProgress);
+
+        // Hide loading screen
+        loadingOverlay.style.opacity = '0';
+        setTimeout(() => {
+            loadingOverlay.style.display = 'none';
+        }, 500); // Wait for fade out animation
+
         initGame(false);
         animationFrameId = requestAnimationFrame(gameLoop);
     } catch (error) {
         console.error("Could not start game:", error);
-        hud.innerHTML = `<strong>Error:</strong> Could not load game assets. Please check the console (F12) for details.`;
+        loadingOverlay.innerHTML = `<strong>Error:</strong> Could not load game assets. Please check the console (F12) for details.`;
     }
 }
 
