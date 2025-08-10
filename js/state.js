@@ -29,10 +29,12 @@ export const gameState = {
     enemies: [],
     projectiles: [],
     spawnPoints: [],
-    base: { x: 0, y: 0, hp: 500, maxHp: 500 }, // Base now has health
+    base: { x: 0, y: 0, hp: 500, maxHp: 500 },
     lastSpawn: 0,
     selectedTower: 'basic',
     hoveredTower: null,
+    mouseGridPos: { x: 0, y: 0 }, // For placement preview
+    animationTimer: 0, // For spinning circles and pulsing lines
 };
 
 export function setSeed(newSeed) {
@@ -51,4 +53,5 @@ export function resetState() {
     gameState.base = { x: 0, y: 0, hp: 500, maxHp: 500, supplyRange: 7 };
     gameState.lastSpawn = 0;
     gameState.hoveredTower = null;
+    gameState.animationTimer = 0;
 }
