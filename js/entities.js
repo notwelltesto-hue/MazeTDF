@@ -130,12 +130,12 @@ function findClosestTarget(enemy) {
 
 export function spawnEnemy(gameTime) {
     if (gameState.spawnPoints.length === 0) return;
-    // UPDATED: Use seeded rng
+    // UPDATED: Use seeded rng for deterministic spawning
     const spawnPoint = gameState.spawnPoints[Math.floor(rng() * gameState.spawnPoints.length)];
     const maxHp = 20 + Math.floor(rng() * 20) + Math.floor(gameTime / 30000);
     gameState.enemies.push({
         x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5,
-        speed: 1.2 + rng() * 0.6, // UPDATED: Use seeded rng
+        speed: 1.2 + rng() * 0.6,
         hp: maxHp, maxHp,
         path: [], target: null, attackCooldown: 0,
         pathfindingCooldown: 0
