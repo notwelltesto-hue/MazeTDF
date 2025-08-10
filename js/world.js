@@ -1,15 +1,15 @@
-// js/world.js (Corrected)
+// js/world.js
 
 import { CHUNK_SIZE } from './config.js';
-import { GAME_SEED, gameState, rng } from './state.js';
+import { GAME_SEED, gameState } from './state.js';
 
-// Internal function for seeded random numbers
 function mulberry32(a) {
     return function() {
-        a |= 0; a = a + 0x6D2B79F5 | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      a |= 0;
+      a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
 }
 
@@ -47,7 +47,6 @@ function generateChunk(cx, cy) {
     return chunk;
 }
 
-// FIX: Added 'export' so other modules can use this function.
 export function getChunk(cx, cy) {
     const key = `${cx},${cy}`;
     if (!gameState.chunks.has(key)) {
@@ -70,7 +69,6 @@ export function revealArea(worldX, worldY, radius) {
     for (let y = worldY - radius; y <= worldY + radius; y++) {
         for (let x = worldX - radius; x <= worldX + radius; x++) {
             if (Math.hypot(x - worldX, y - worldY) > radius) continue;
-
             const { cx, cy, lx, ly } = worldToChunkCoords(x, y);
             const chunk = getChunk(cx, cy);
             if (chunk.fog[ly][lx]) {
@@ -93,37 +91,36 @@ function scanForNewSpawner(x, y) {
     }
     if (!isEdgeOfDarkness) return;
     if (gameState.spawnPoints.some(sp => Math.hypot(sp.x - x, sp.y - y) < 10)) return;
-
     if (findPath({ x, y }, gameState.base)) {
         gameState.spawnPoints.push({ x, y });
     }
 }
 
 export function findPath(start, goal) {
-    const q = [{ x: start.x, y: start.y }];
-    const visited = new Set([`${start.x},${start.y}`]);
-    const prev = new Map();
+    const goalKey = `${Math.floor(goal.x)},${Math.floor(goal.y)}`;
+    const q = [{ x: Math.floor(start.x), y: Math.floor(start.y), path: [] }];
+    const visited = new Set([`${Math.floor(start.x)},${Math.floor(start.y)}`]);
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    while (q.length) {
+
+    while (q.length > 0) {
         const cur = q.shift();
-        if (cur.x === goal.x && cur.y === goal.y) {
-            const path = [];
-            let p = cur;
-            while (p) {
-                path.unshift(p);
-                p = prev.get(`${p.x},${p.y}`);
-            }
-            return path;
+        const curKey = `${cur.x},${cur.y}`;
+
+        if (curKey === goalKey) {
+            return cur.path;
         }
+
         for (const d of dirs) {
-            const nx = cur.x + d[0], ny = cur.y + d[1];
+            const nx = cur.x + d[0];
+            const ny = cur.y + d[1];
             const key = `${nx},${ny}`;
             if (!visited.has(key) && getTile(nx, ny).tile === 0) {
                 visited.add(key);
-                prev.set(key, cur);
-                q.push({ x: nx, y: ny });
+                const newPath = cur.path.slice(); // Create a copy of the path
+                newPath.push({ x: nx, y: ny });
+                q.push({ x: nx, y: ny, path: newPath });
             }
         }
     }
-    return null;
+    return null; // No path found
 }
