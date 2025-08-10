@@ -4,13 +4,17 @@ import { gameState, rng } from './state.js';
 import { COST, TOWER, BUILD_TIME_SECONDS } from './config.js';
 import * as world from './world.js';
 
-function normalizeAngle(a) { /* ... no changes ... */ }
+function normalizeAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+}
 
 function updateSupplyNetwork() {
     gameState.towers.forEach(t => { if (t.type === TOWER.SUPPLY) t.isPowered = false; });
     const queue = [gameState.base];
     const visited = new Set([`${gameState.base.x},${gameState.base.y}`]);
-    while(queue.length > 0) {
+    while (queue.length > 0) {
         const source = queue.shift();
         const sourceRange = source.supplyRange || 0;
         for (const relay of gameState.towers) {
@@ -31,7 +35,7 @@ function canPlaceTower(x, y, type) {
     if (x === gameState.base.x && y === gameState.base.y) return false;
 
     const sources = [gameState.base, ...gameState.towers.filter(t => t.type === TOWER.SUPPLY && t.isPowered)];
-    for(const source of sources) {
+    for (const source of sources) {
         if (Math.hypot(x - source.x, y - source.y) <= source.supplyRange) return true;
     }
     return false;
@@ -67,7 +71,7 @@ export function updateTowers(dt) {
             t.buildProgress += dt / BUILD_TIME_SECONDS;
             if (t.buildProgress >= 1) {
                 t.isConstructing = false;
-                if(t.type === TOWER.SUPPLY) updateSupplyNetwork();
+                if (t.type === TOWER.SUPPLY) updateSupplyNetwork();
             }
         }
     });
@@ -75,7 +79,7 @@ export function updateTowers(dt) {
     let networkNeedsUpdate = false;
     for (let i = gameState.towers.length - 1; i >= 0; i--) {
         if (gameState.towers[i].hp <= 0) {
-            if(gameState.towers[i].type === TOWER.SUPPLY) networkNeedsUpdate = true;
+            if (gameState.towers[i].type === TOWER.SUPPLY) networkNeedsUpdate = true;
             gameState.towers.splice(i, 1);
         }
     }
@@ -112,8 +116,8 @@ export function updateTowers(dt) {
 function findClosestTarget(enemy) {
     let closestTarget = gameState.base;
     let minDistance = Math.hypot(enemy.x - (gameState.base.x + 0.5), enemy.y - (gameState.base.y + 0.5));
-    for(const tower of gameState.towers) {
-        if(tower.isConstructing) continue;
+    for (const tower of gameState.towers) {
+        if (tower.isConstructing) continue;
         const distance = Math.hypot(enemy.x - (tower.x + 0.5), enemy.y - (tower.y + 0.5));
         if (distance < minDistance) {
             minDistance = distance;
@@ -133,10 +137,15 @@ export function spawnEnemy(gameTime) {
 export function updateEnemies(dt) {
     for (let i = gameState.enemies.length - 1; i >= 0; i--) {
         const e = gameState.enemies[i];
-        if (e.hp <= 0) { gameState.enemies.splice(i, 1); continue; }
+        if (e.hp <= 0) {
+            gameState.enemies.splice(i, 1);
+            continue;
+        }
         e.attackCooldown -= dt;
 
-        if (!e.target || e.target.hp <= 0) e.target = findClosestTarget(e);
+        if (!e.target || e.target.hp <= 0) {
+            e.target = findClosestTarget(e);
+        }
 
         const targetPos = { x: e.target.x + 0.5, y: e.target.y + 0.5 };
         const distToTarget = Math.hypot(e.x - targetPos.x, e.y - targetPos.y);
@@ -145,12 +154,14 @@ export function updateEnemies(dt) {
             if (e.attackCooldown <= 0) {
                 e.target.hp -= 10;
                 e.attackCooldown = 1.0;
-                if (e.target === gameState.base) gameState.lives--;
+                if (e.target === gameState.base) {
+                    gameState.lives--;
+                }
             }
         } else {
-            e.path = world.findPath({x: Math.floor(e.x), y: Math.floor(e.y)}, {x: Math.floor(e.target.x), y: Math.floor(e.target.y)});
-            if (e.path && e.path.length > 1) {
-                const nextNode = e.path[1];
+            const path = world.findPath(e, e.target);
+            if (path && path.length > 0) {
+                const nextNode = path[0];
                 const tx = nextNode.x + 0.5, ty = nextNode.y + 0.5;
                 const distToNode = Math.hypot(tx - e.x, ty - e.y);
                 const move = e.speed * dt;
@@ -161,4 +172,19 @@ export function updateEnemies(dt) {
     }
 }
 
-export function updateProjectiles(dt) { /* ... no changes ... */ }
+export function updateProjectiles(dt) {
+    for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
+        const p = gameState.projectiles[i];
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.target?.hp > 0 && Math.hypot(p.x - p.target.x, p.y - p.target.y) < 0.5) {
+            p.target.hp -= 7;
+            gameState.projectiles.splice(i, 1);
+            continue;
+        }
+        if (p.life <= 0 || p.target?.hp <= 0) {
+            gameState.projectiles.splice(i, 1);
+        }
+    }
+}
