@@ -18,6 +18,8 @@ let animationFrameId = null;
 function gameLoop(now) {
     const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
     lastFrameTime = now;
+    gameState.animationTimer += dt;
+
     updateCamera(dt);
     gameState.lastSpawn += dt * 1000;
     if (gameState.lastSpawn >= spawnIntervalMs) {
@@ -37,6 +39,7 @@ function gameLoop(now) {
     drawing.drawEnemies(ctx);
     drawing.drawProjectiles(ctx);
     drawing.drawHoverOverlay(ctx);
+    drawing.drawPlacementPreview(ctx);
     ctx.restore();
     drawing.drawHUD();
 
@@ -52,8 +55,9 @@ function initGame(reseed = false) {
         setSeed(Math.floor(Math.random() * 0x7fffffff));
     }
     resetState();
-    world.revealArea(gameState.base.x, gameState.base.y, 4);
-    entities.placeTower(gameState.base.x + 1, gameState.base.y, TOWER.LIGHTER);
+    // Start with a small revealed area around the base
+    world.revealArea(gameState.base.x, gameState.base.y, 2);
+    // Spawners will now appear organically
     lastFrameTime = performance.now();
     camera.zoom = 1;
     camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
@@ -80,6 +84,7 @@ function screenToWorld(sx, sy) {
 function handleMouseMove(ev) {
     const rect = canvas.getBoundingClientRect();
     const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+    gameState.mouseGridPos = { x: worldCoords.x, y: worldCoords.y };
     gameState.hoveredTower = gameState.towers.find(t => t.x === worldCoords.x && t.y === worldCoords.y) || null;
 }
 
