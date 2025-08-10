@@ -1,10 +1,11 @@
-// js/main.js (Corrected)
+// js/main.js (Updated)
 
 import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, TOWER } from './config.js';
 import { camera, keys, gameState, setSeed, resetState } from './state.js';
 import * as world from './world.js';
 import * as entities from './entities.js';
 import * as drawing from './drawing.js';
+import { loadAssets } from './assets.js'; // Import the asset loader
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -33,11 +34,9 @@ function gameLoop(now) {
     // --- Drawing ---
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    // FIX: Correct rendering transform. Scale first, then translate.
     ctx.scale(camera.zoom, camera.zoom);
     ctx.translate(-camera.x, -camera.y);
 
-    // All drawing functions now work in world pixel coordinates
     drawing.drawGrid(ctx);
     drawing.drawTowers(ctx);
     drawing.drawEnemies(ctx);
@@ -69,7 +68,6 @@ function initGame(reseed = false) {
     camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
     camera.y = (gameState.base.y + 0.5) * TILE_SIZE - (CANVAS_H / 2);
 
-    // Start the game loop if it's a reset
     if (reseed) {
         requestAnimationFrame(gameLoop);
     }
@@ -87,7 +85,6 @@ function updateCamera(dt) {
     camera.zoom = Math.max(0.3, Math.min(camera.zoom, 4));
 }
 
-// FIX: Corrected screen-to-world coordinate conversion
 function screenToWorld(sx, sy) {
     const worldX = sx / camera.zoom + camera.x;
     const worldY = sy / camera.zoom + camera.y;
@@ -119,5 +116,19 @@ window.addEventListener('resize', () => {
 });
 
 // --- Start Game ---
-initGame(false);
-requestAnimationFrame(gameLoop);
+// UPDATED: Create an async function to handle asset loading
+async function startGame() {
+    const hud = document.getElementById('hud');
+    try {
+        hud.innerHTML = 'Loading assets...';
+        await loadAssets(); // Wait for all images to download
+        initGame(false);
+        requestAnimationFrame(gameLoop);
+    } catch (error) {
+        console.error("Could not start game:", error);
+        hud.innerHTML = `<strong>Error:</strong> Could not load game assets. Please check the console (F12) for details.`;
+    }
+}
+
+// Call the new async start function
+startGame();
