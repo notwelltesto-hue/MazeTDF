@@ -91,8 +91,13 @@ export function drawTowers(ctx) {
             ctx.save(); ctx.translate(cx, cy); ctx.rotate(t.angle);
             ctx.fillStyle = '#0033cc'; ctx.fillRect(0, -5, TILE_SIZE * 0.45, 10); ctx.restore();
         } else if (t.type === TOWER.LIGHTER) {
-            // Lighters don't emit light, they reveal an area once.
-            ctx.fillStyle = 'gold'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
+            // UPDATED: Draw the new sprite for the Lighter tower
+            if (assets.lightTower) {
+                ctx.drawImage(assets.lightTower, cx - size / 2, cy - size / 2, size, size);
+            } else {
+                // Fallback drawing
+                ctx.fillStyle = 'gold'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
+            }
         } else if (t.type === TOWER.MINE) {
             if (assets.gemMine) {
                 ctx.drawImage(assets.gemMine, cx - size / 2, cy - size / 2, size, size);
@@ -152,22 +157,40 @@ const TOWER_RANGES = {
 };
 
 export function drawPlacementPreview(ctx) {
-    if (gameState.hoveredTower) return; // Don't draw if hovering over an existing tower
+    if (gameState.hoveredTower) return;
 
     const {x, y} = gameState.mouseGridPos;
     const type = gameState.selectedTower;
     const cx = (x + 0.5) * TILE_SIZE;
     const cy = (y + 0.5) * TILE_SIZE;
+    const size = TILE_SIZE;
 
     const isValid = canPlaceTower(x,y);
     ctx.globalAlpha = 0.5;
-    ctx.fillStyle = isValid ? 'green' : 'red';
 
+    // UPDATED: Show sprite preview for Mine and Lighter towers
     if (type === TOWER.MINE && assets.gemMine) {
-         ctx.drawImage(assets.gemMine, cx - TILE_SIZE / 2, cy - TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+         ctx.drawImage(assets.gemMine, cx - size / 2, cy - size / 2, size, size);
+    } else if (type === TOWER.LIGHTER && assets.lightTower) {
+         ctx.drawImage(assets.lightTower, cx - size / 2, cy - size / 2, size, size);
     } else {
+        // Fallback for other towers or if assets are missing
+        ctx.fillStyle = isValid ? 'green' : 'red';
         ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
     }
+
+    if (!isValid) {
+        // If placement is invalid, draw a red X over the preview
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx - size/4, cy - size/4);
+        ctx.lineTo(cx + size/4, cy + size/4);
+        ctx.moveTo(cx + size/4, cy - size/4);
+        ctx.lineTo(cx - size/4, cy + size/4);
+        ctx.stroke();
+    }
+
 
     const range = (TOWER_RANGES[type] || 0) * TILE_SIZE;
     if(range > 0) {
