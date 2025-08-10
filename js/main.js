@@ -1,7 +1,7 @@
 // js/main.js
 
-import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, TOWER } from './config.js';
-import { camera, keys, gameState, setSeed, resetState } from './state.js';
+import { CANVAS_W, CANVAS_H, TILE_SIZE, spawnIntervalMs, updateCanvasSize, HOTBAR_TOWERS, GUI_CONFIG } from './config.js';
+import { camera, keys, gameState, guiState, setSeed, resetState } from './state.js';
 import * as world from './world.js';
 import * as entities from './entities.js';
 import * as drawing from './drawing.js';
@@ -19,17 +19,12 @@ function gameLoop(now) {
     const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
     lastFrameTime = now;
     gameState.animationTimer += dt;
-
     updateCamera(dt);
     gameState.lastSpawn += dt * 1000;
-    if (gameState.lastSpawn >= spawnIntervalMs) {
-        entities.spawnEnemy(now);
-        gameState.lastSpawn = 0;
-    }
+    if (gameState.lastSpawn >= spawnIntervalMs) entities.spawnEnemy(now);
     entities.updateEnemies(dt);
     entities.updateProjectiles(dt);
     entities.updateTowers(dt);
-
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.scale(camera.zoom, camera.zoom);
@@ -41,8 +36,7 @@ function gameLoop(now) {
     drawing.drawHoverOverlay(ctx);
     drawing.drawPlacementPreview(ctx);
     ctx.restore();
-    drawing.drawHUD();
-
+    drawing.drawGUI(ctx);
     if (gameState.lives <= 0 || gameState.base.hp <= 0) {
         drawing.drawGameOver(ctx);
     } else {
@@ -51,25 +45,13 @@ function gameLoop(now) {
 }
 
 function initGame(reseed = false) {
-    if (reseed) {
-        setSeed(Math.floor(Math.random() * 0x7fffffff));
-    }
+    if (reseed) setSeed(Math.floor(Math.random() * 0x7fffffff));
     resetState();
-    
-    // Reveal a larger area at the start
     world.revealArea(gameState.base.x, gameState.base.y, 5);
-
-    // UPDATED: Place a free lighter tower to kickstart expansion and spawner reveal
-    // This doesn't cost gems and bypasses the normal placement rules.
-    const startLighter = {
-        x: gameState.base.x + 2, y: gameState.base.y, type: TOWER.LIGHTER,
-        hp: 100, maxHp: 100, isConstructing: false, buildProgress: 1,
-    };
+    const startLighter = { x: gameState.base.x + 2, y: gameState.base.y, type: 'lighter', hp: 100, maxHp: 100, isConstructing: false, buildProgress: 1 };
     gameState.towers.push(startLighter);
     world.revealArea(startLighter.x, startLighter.y, 5);
-
     gameState.allowSpawners = true;
-
     lastFrameTime = performance.now();
     camera.zoom = 1;
     camera.x = (gameState.base.x + 0.5) * TILE_SIZE - (CANVAS_W / 2);
@@ -95,38 +77,59 @@ function screenToWorld(sx, sy) {
 
 function handleMouseMove(ev) {
     const rect = canvas.getBoundingClientRect();
-    const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+    const mouseX = ev.clientX - rect.left;
+    const mouseY = ev.clientY - rect.top;
+    const worldCoords = screenToWorld(mouseX, mouseY);
     gameState.mouseGridPos = { x: worldCoords.x, y: worldCoords.y };
     gameState.hoveredTower = gameState.towers.find(t => t.x === worldCoords.x && t.y === worldCoords.y) || null;
+    const numSlots = HOTBAR_TOWERS.length;
+    const totalWidth = numSlots * GUI_CONFIG.HOTBAR_SLOT_SIZE + (numSlots - 1) * GUI_CONFIG.HOTBAR_SLOT_GAP;
+    const startX = (CANVAS_W - totalWidth) / 2;
+    const startY = CANVAS_H - GUI_CONFIG.HOTBAR_Y_OFFSET - GUI_CONFIG.HOTBAR_SLOT_SIZE;
+    guiState.hoveredSlot = null;
+    guiState.isMouseOverGUI = false;
+    if (mouseY > startY && mouseY < startY + GUI_CONFIG.HOTBAR_SLOT_SIZE) {
+        for(let i=0; i < numSlots; i++) {
+            const slotX = startX + i * (GUI_CONFIG.HOTBAR_SLOT_SIZE + GUI_CONFIG.HOTBAR_SLOT_GAP);
+            if(mouseX > slotX && mouseX < slotX + GUI_CONFIG.HOTBAR_SLOT_SIZE) {
+                guiState.hoveredSlot = i;
+                guiState.isMouseOverGUI = true;
+                break;
+            }
+        }
+    }
 }
 
 canvas.addEventListener('mousemove', handleMouseMove);
 canvas.addEventListener('click', (ev) => {
+    if (guiState.isMouseOverGUI && guiState.hoveredSlot !== null) {
+        guiState.hotbarSlot = guiState.hoveredSlot;
+        return;
+    }
     const rect = canvas.getBoundingClientRect();
     const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
-    entities.placeTower(worldCoords.x, worldCoords.y, gameState.selectedTower);
+    entities.placeTower(worldCoords.x, worldCoords.y);
 });
 canvas.addEventListener('contextmenu', (ev) => {
     ev.preventDefault();
+    if (guiState.isMouseOverGUI) return;
     const rect = canvas.getBoundingClientRect();
     const worldCoords = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
     entities.cancelBuilding(worldCoords.x, worldCoords.y);
 });
 document.addEventListener('keydown', (e) => {
     keys[e.key.toLowerCase()] = true;
-    if (e.key === '1') gameState.selectedTower = TOWER.BASIC;
-    else if (e.key === '2') gameState.selectedTower = TOWER.LIGHTER;
-    else if (e.key === '3') gameState.selectedTower = TOWER.MINE;
-    else if (e.key === '4') gameState.selectedTower = TOWER.SUPPLY;
+    const keyNum = parseInt(e.key);
+    if (keyNum >= 1 && keyNum <= HOTBAR_TOWERS.length) {
+        guiState.hotbarSlot = keyNum - 1;
+    }
     else if (e.key.toLowerCase() === 'r') {
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         initGame(true);
         animationFrameId = requestAnimationFrame(gameLoop);
     }
 });
-
 document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
-
 window.addEventListener('resize', () => {
     updateCanvasSize();
     canvas.width = CANVAS_W;
@@ -136,18 +139,11 @@ window.addEventListener('resize', () => {
 async function startGame() {
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingBar = document.getElementById('loading-bar');
-
     try {
-        const onProgress = (progress) => {
-            loadingBar.style.width = `${progress * 100}%`;
-        };
+        const onProgress = (progress) => { loadingBar.style.width = `${progress * 100}%`; };
         await loadAssets(onProgress);
-
         loadingOverlay.style.opacity = '0';
-        setTimeout(() => {
-            loadingOverlay.style.display = 'none';
-        }, 500);
-
+        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 500);
         initGame(false);
         animationFrameId = requestAnimationFrame(gameLoop);
     } catch (error) {
