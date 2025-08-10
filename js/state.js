@@ -34,6 +34,7 @@ export const gameState = {
     towers: [],
     enemies: [],
     projectiles: [],
+    effects: [], // For visual effects like explosions
     spawnPoints: [],
     base: { x: 0, y: 0, hp: 500, maxHp: 500 },
     lastSpawn: 0,
@@ -55,6 +56,7 @@ export function resetState() {
     gameState.towers = [];
     gameState.enemies = [];
     gameState.projectiles = [];
+    gameState.effects = []; // Reset effects
     gameState.spawnPoints = [];
     gameState.base = { x: 0, y: 0, hp: 500, maxHp: 500, supplyRange: 7 };
     gameState.lastSpawn = 0;
