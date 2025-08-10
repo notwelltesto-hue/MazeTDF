@@ -1,9 +1,10 @@
 // js/drawing.js
 
-import { TILE_SIZE, CHUNK_SIZE, TOWER, CANVAS_W, CANVAS_H } from './config.js';
+import { TILE_SIZE, CHUNK_SIZE, TOWER, CANVAS_W, CANVAS_H, COST } from './config.js';
 import { camera, gameState, GAME_SEED } from './state.js';
-import { getChunk } from './world.js';
+import { getChunk, getTile } from './world.js';
 import { assets } from './assets.js';
+import { canPlaceTower } from './entities.js';
 
 export function drawGrid(ctx) {
     const view = {
@@ -55,15 +56,29 @@ export function drawGrid(ctx) {
     });
 }
 
-export function drawTowers(ctx) {
-    ctx.fillStyle = 'rgba(150, 120, 255, 0.08)';
-    const sources = [gameState.base, ...gameState.towers.filter(t => t.type === TOWER.SUPPLY && t.isPowered && !t.isConstructing)];
-    for (const source of sources) {
-        const range = source.supplyRange * TILE_SIZE;
-        ctx.beginPath();
-        ctx.arc((source.x + 0.5) * TILE_SIZE, (source.y + 0.5) * TILE_SIZE, range, 0, Math.PI * 2);
-        ctx.fill();
+function drawSupplyLines(ctx) {
+    ctx.lineWidth = 2;
+    const pulse = Math.sin(gameState.animationTimer * 4) * 0.25 + 0.75;
+    ctx.strokeStyle = `rgba(220, 200, 255, ${pulse})`;
+
+    for(const t of gameState.towers) {
+        if(t.isPowered && t.powerSource) {
+            ctx.beginPath();
+            ctx.moveTo((t.x + 0.5) * TILE_SIZE, (t.y + 0.5) * TILE_SIZE);
+            ctx.lineTo((t.powerSource.x + 0.5) * TILE_SIZE, (t.powerSource.y + 0.5) * TILE_SIZE);
+            ctx.stroke();
+        }
     }
+}
+
+export function drawTowers(ctx) {
+    drawSupplyLines(ctx);
+
+    const baseRange = gameState.base.supplyRange * TILE_SIZE;
+    ctx.fillStyle = 'rgba(150, 120, 255, 0.08)';
+    ctx.beginPath();
+    ctx.arc((gameState.base.x + 0.5) * TILE_SIZE, (gameState.base.y + 0.5) * TILE_SIZE, baseRange, 0, Math.PI * 2);
+    ctx.fill();
 
     for (const t of gameState.towers) {
         const cx = (t.x + 0.5) * TILE_SIZE;
@@ -76,6 +91,7 @@ export function drawTowers(ctx) {
             ctx.save(); ctx.translate(cx, cy); ctx.rotate(t.angle);
             ctx.fillStyle = '#0033cc'; ctx.fillRect(0, -5, TILE_SIZE * 0.45, 10); ctx.restore();
         } else if (t.type === TOWER.LIGHTER) {
+            // Lighters don't emit light, they reveal an area once.
             ctx.fillStyle = 'gold'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
         } else if (t.type === TOWER.MINE) {
             if (assets.gemMine) {
@@ -121,11 +137,45 @@ export function drawHoverOverlay(ctx) {
     }
     const range = (t.range > 0 ? t.range : t.supplyRange) * TILE_SIZE;
     if (range > 0) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(cx, cy, range, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 12]);
+        ctx.lineDashOffset = -gameState.animationTimer * 50;
+        ctx.beginPath(); ctx.arc(cx, cy, range, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
     }
+}
+
+const TOWER_RANGES = {
+    [TOWER.BASIC]: 3.2,
+    [TOWER.SUPPLY]: 7,
+};
+
+export function drawPlacementPreview(ctx) {
+    if (gameState.hoveredTower) return; // Don't draw if hovering over an existing tower
+
+    const {x, y} = gameState.mouseGridPos;
+    const type = gameState.selectedTower;
+    const cx = (x + 0.5) * TILE_SIZE;
+    const cy = (y + 0.5) * TILE_SIZE;
+
+    const isValid = canPlaceTower(x,y);
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = isValid ? 'green' : 'red';
+
+    if (type === TOWER.MINE && assets.gemMine) {
+         ctx.drawImage(assets.gemMine, cx - TILE_SIZE / 2, cy - TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+    } else {
+        ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
+    }
+
+    const range = (TOWER_RANGES[type] || 0) * TILE_SIZE;
+    if(range > 0) {
+        ctx.strokeStyle = isValid ? 'white' : 'red';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(cx, cy, range, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
 }
 
 export function drawEnemies(ctx) {
