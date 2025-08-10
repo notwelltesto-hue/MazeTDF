@@ -1,6 +1,5 @@
 // js/config.js
 
-// TOWER enum is now defined here and exported for use everywhere
 export const TOWER = { BASIC: 'basic', LIGHTER: 'lighter', MINE: 'mine', SUPPLY: 'supply' };
 
 export const TILE_SIZE = 32;
@@ -12,6 +11,12 @@ export const spawnIntervalMs = 1700;
 export const BUILD_TIME_SECONDS = 3.0;
 
 export const COST = { basic: 20, lighter: 30, mine: 50, supply: 40 };
+
+// Defines the attack/supply range of towers for drawing previews
+export const TOWER_RANGES = {
+    [TOWER.BASIC]: 3.2,
+    [TOWER.SUPPLY]: 7,
+};
 
 // --- GUI Configuration ---
 export const GUI_CONFIG = {
@@ -33,7 +38,7 @@ export const GUI_CONFIG = {
     TOOLTIP_BORDER_COLOR: '#888',
     TOOLTIP_WIDTH: 200,
     TOOLTIP_FONT_COLOR: '#FFFFFF',
-    TOOLTIP_COST_COLOR: '#FFD700', // Gold color for cost
+    TOOLTIP_COST_COLOR: '#FFD700',
     TOOLTIP_FONT: '14px sans-serif',
     TOOLTIP_TITLE_FONT: 'bold 16px sans-serif',
 };
@@ -49,3 +54,4 @@ export const HOTBAR_TOWERS = [
 export function updateCanvasSize() {
     CANVAS_W = window.innerWidth;
     CANVAS_H = window.innerHeight;
+}
