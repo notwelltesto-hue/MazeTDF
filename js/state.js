@@ -1,6 +1,5 @@
 // js/state.js
 
-// --- RNG & Seed ---
 function mulberry32(a) {
     return function() {
       a |= 0;
@@ -16,14 +15,12 @@ function parseSeed() {
     return params.get('seed') ? Number(params.get('seed')) || 0 : Math.floor(Math.random()*0x7fffffff);
 }
 
-// --- Exports ---
 export let GAME_SEED = parseSeed();
 export let rng = mulberry32(GAME_SEED);
 
 export const camera = { x: 0, y: 0, zoom: 1, speed: 400 };
 export const keys = {};
 
-// This object holds all the "live" data for the game
 export const gameState = {
     gems: 0,
     lives: 0,
@@ -32,9 +29,10 @@ export const gameState = {
     enemies: [],
     projectiles: [],
     spawnPoints: [],
-    base: { x: 0, y: 0 },
+    base: { x: 0, y: 0, hp: 500, maxHp: 500 }, // Base now has health
     lastSpawn: 0,
     selectedTower: 'basic',
+    hoveredTower: null,
 };
 
 export function setSeed(newSeed) {
@@ -50,6 +48,7 @@ export function resetState() {
     gameState.enemies = [];
     gameState.projectiles = [];
     gameState.spawnPoints = [];
-    gameState.base = { x: 0, y: 0 };
+    gameState.base = { x: 0, y: 0, hp: 500, maxHp: 500, supplyRange: 7 };
     gameState.lastSpawn = 0;
+    gameState.hoveredTower = null;
 }
