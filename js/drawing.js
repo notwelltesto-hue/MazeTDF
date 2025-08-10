@@ -1,6 +1,6 @@
-// js/drawing.js (Updated)
+// js/drawing.js
 
-import { TILE_SIZE, CHUNK_SIZE, COST, TOWER, CANVAS_W, CANVAS_H } from './config.js';
+import { TILE_SIZE, CHUNK_SIZE, TOWER, CANVAS_W, CANVAS_H } from './config.js';
 import { camera, gameState, GAME_SEED } from './state.js';
 import { getChunk } from './world.js';
 import { assets } from './assets.js'; // Import the loaded assets
@@ -53,11 +53,8 @@ export function drawGrid(ctx) {
             }
         }
     }
-    // Base
     ctx.fillStyle = '#444'; ctx.fillRect(gameState.base.x * TILE_SIZE, gameState.base.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     ctx.fillStyle = '#222'; ctx.fillRect(gameState.base.x * TILE_SIZE + 6, gameState.base.y * TILE_SIZE + 6, TILE_SIZE - 12, TILE_SIZE - 12);
-
-    // Spawners
     gameState.spawnPoints.forEach(sp => {
         ctx.fillStyle = 'rgba(150, 0, 0, 0.7)';
         ctx.fillRect(sp.x * TILE_SIZE, sp.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -68,18 +65,20 @@ export function drawTowers(ctx) {
     for (const t of gameState.towers) {
         const cx = (t.x + 0.5) * TILE_SIZE;
         const cy = (t.y + 0.5) * TILE_SIZE;
+        const size = TILE_SIZE;
+
         if (t.type === TOWER.BASIC) {
+             // Fallback drawing
             ctx.fillStyle = 'blue'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
             ctx.save(); ctx.translate(cx, cy); ctx.rotate(t.angle);
             ctx.fillStyle = '#0033cc'; ctx.fillRect(0, -5, TILE_SIZE * 0.45, 10); ctx.restore();
         } else if (t.type === TOWER.LIGHTER) {
+             // Fallback drawing
             ctx.fillStyle = 'gold'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
             ctx.strokeStyle = 'rgba(255,230,100,0.1)'; ctx.lineWidth = 4;
             ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 5, 0, Math.PI * 2); ctx.stroke();
         } else if (t.type === TOWER.MINE) {
-            // UPDATED: Draw the sprite instead of shapes
             if (assets.gemMine) {
-                const size = TILE_SIZE * 0.9; // Make the sprite slightly smaller than the tile
                 ctx.drawImage(assets.gemMine, cx - size / 2, cy - size / 2, size, size);
             } else {
                 // Fallback drawing if image fails to load
@@ -93,8 +92,10 @@ export function drawEnemies(ctx) {
     for (const e of gameState.enemies) {
         const cx = e.x * TILE_SIZE;
         const cy = e.y * TILE_SIZE;
+        // Fallback drawing
         ctx.fillStyle = 'crimson';
         ctx.fillRect(cx - 10, cy - 10, 20, 20);
+
         const hpFrac = Math.max(0, e.hp) / e.maxHp;
         ctx.fillStyle = '#222';
         ctx.fillRect(cx - 12, cy - 16, 24, 4);
