@@ -1,13 +1,13 @@
-// js/assets.js (Corrected)
+// js/assets.js (Updated)
 
 // This object will hold all our loaded images
 export const assets = {};
 
 // A list of all assets we want to load
 const assetList = [
-    // FIX: The path is relative to index.html. Since they are in the same
-    // root folder ('moomoo'), the path is simply 'media/gemMine.png'.
-    { name: 'gemMine', src: 'media/gemMine.png' }
+    // FIX: Using an absolute path starting with "/" to ensure the browser
+    // looks in the correct place, relative to the server root.
+    { name: 'gemMine', src: '/media/gemMine.png' }
 ];
 
 let assetsLoaded = 0;
