@@ -15,26 +15,30 @@ canvas.height = CANVAS_H;
 let lastFrameTime = performance.now();
 let animationFrameId = null;
 
+function updateEffects(dt) {
+    for(let i = gameState.effects.length - 1; i >= 0; i--) {
+        const effect = gameState.effects[i];
+        effect.life -= dt;
+        if (effect.life <= 0) {
+            gameState.effects.splice(i, 1);
+        }
+    }
+}
+
 function gameLoop(now) {
     const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
     lastFrameTime = now;
     gameState.animationTimer += dt;
-
     updateCamera(dt);
-
-    // UPDATED: This is the robust spawn timer logic
     gameState.lastSpawn += dt * 1000;
-    // Use a while loop to handle cases where multiple enemies should spawn after a lag spike
     while (gameState.lastSpawn >= spawnIntervalMs) {
         entities.spawnEnemy(now);
-        // Subtract the interval instead of resetting to zero. This preserves leftover time.
         gameState.lastSpawn -= spawnIntervalMs;
     }
-
     entities.updateEnemies(dt);
     entities.updateProjectiles(dt);
     entities.updateTowers(dt);
-
+    updateEffects(dt);
     ctx.save();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.scale(camera.zoom, camera.zoom);
@@ -43,11 +47,11 @@ function gameLoop(now) {
     drawing.drawTowers(ctx);
     drawing.drawEnemies(ctx);
     drawing.drawProjectiles(ctx);
+    drawing.drawEffects(ctx);
     drawing.drawHoverOverlay(ctx);
     drawing.drawPlacementPreview(ctx);
     ctx.restore();
     drawing.drawGUI(ctx);
-
     if (gameState.lives <= 0 || gameState.base.hp <= 0) {
         drawing.drawGameOver(ctx);
     } else {
