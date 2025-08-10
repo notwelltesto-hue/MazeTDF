@@ -1,9 +1,9 @@
-// js/drawing.js (Corrected)
+// js/drawing.js (Updated)
 
 import { TILE_SIZE, CHUNK_SIZE, COST, TOWER, CANVAS_W, CANVAS_H } from './config.js';
-// FIX: Import GAME_SEED to display in the HUD
 import { camera, gameState, GAME_SEED } from './state.js';
 import { getChunk } from './world.js';
+import { assets } from './assets.js'; // Import the loaded assets
 
 export function drawGrid(ctx) {
     const view = {
@@ -77,8 +77,14 @@ export function drawTowers(ctx) {
             ctx.strokeStyle = 'rgba(255,230,100,0.1)'; ctx.lineWidth = 4;
             ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 5, 0, Math.PI * 2); ctx.stroke();
         } else if (t.type === TOWER.MINE) {
-            ctx.fillStyle = 'green'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.28, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#0a0'; ctx.fillRect(cx - 6, cy + 4, 12, 6);
+            // UPDATED: Draw the sprite instead of shapes
+            if (assets.gemMine) {
+                const size = TILE_SIZE * 0.9; // Make the sprite slightly smaller than the tile
+                ctx.drawImage(assets.gemMine, cx - size / 2, cy - size / 2, size, size);
+            } else {
+                // Fallback drawing if image fails to load
+                ctx.fillStyle = 'green'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.28, 0, Math.PI * 2); ctx.fill();
+            }
         }
     }
 }
@@ -108,7 +114,6 @@ export function drawProjectiles(ctx) {
 
 export function drawHUD() {
     const hud = document.getElementById('hud');
-    // FIX: Used GAME_SEED instead of the non-existent gameState.seed
     hud.innerHTML = `Seed: <b>${GAME_SEED}</b> &nbsp; Gems: <b>${gameState.gems}</b> &nbsp; Lives: <b>${gameState.lives}</b> &nbsp; Selected: <b>${gameState.selectedTower}</b> &nbsp; Spawners: ${gameState.spawnPoints.length}`;
 }
 
