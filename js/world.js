@@ -24,7 +24,8 @@ function worldToChunkCoords(worldX, worldY) {
 function deterministicTile(x, y) {
     const h = (GAME_SEED ^ (x * 374761393) ^ (y * 668265263)) >>> 0;
     const cellRng = mulberry32(h);
-    const isWall = cellRng() < 0.28;
+    // UPDATED: Increased wall probability for more maze-like structures
+    const isWall = cellRng() < 0.33;
     const hasGem = cellRng() < 0.12;
     return { tile: isWall ? 1 : 0, gem: !isWall && hasGem };
 }
@@ -105,22 +106,20 @@ export function findPath(start, goal) {
     while (q.length > 0) {
         const cur = q.shift();
         const curKey = `${cur.x},${cur.y}`;
-
         if (curKey === goalKey) {
             return cur.path;
         }
-
         for (const d of dirs) {
             const nx = cur.x + d[0];
             const ny = cur.y + d[1];
             const key = `${nx},${ny}`;
             if (!visited.has(key) && getTile(nx, ny).tile === 0) {
                 visited.add(key);
-                const newPath = cur.path.slice(); // Create a copy of the path
+                const newPath = cur.path.slice();
                 newPath.push({ x: nx, y: ny });
                 q.push({ x: nx, y: ny, path: newPath });
             }
         }
     }
-    return null; // No path found
+    return null;
 }
