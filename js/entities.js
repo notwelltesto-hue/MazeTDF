@@ -1,6 +1,6 @@
 // js/entities.js
 
-import { gameState, guiState } from './state.js';
+import { gameState, guiState, rng } from './state.js';
 import { COST, BUILD_TIME_SECONDS, HOTBAR_TOWERS, TOWER } from './config.js';
 import * as world from './world.js';
 
@@ -107,7 +107,7 @@ export function updateTowers(dt) {
         } else if (t.type === TOWER.MINE) {
             t.mineTimer += dt;
             if (t.mineTimer >= 3.5) {
-                gameState.gems += 10;
+                gameState.gems += 10 + Math.floor(rng() * 8);
                 t.mineTimer = 0;
             }
         }
@@ -130,15 +130,25 @@ function findClosestTarget(enemy) {
 
 export function spawnEnemy(gameTime) {
     if (gameState.spawnPoints.length === 0) return;
-    const spawnPoint = gameState.spawnPoints[Math.floor(Math.random() * gameState.spawnPoints.length)];
-    const maxHp = 20 + Math.floor(Math.random() * 20) + Math.floor(gameTime / 30000);
-    gameState.enemies.push({ x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5, speed: 1.2 + Math.random() * 0.6, hp: maxHp, maxHp, path: [], target: null, attackCooldown: 0, pathfindingCooldown: 0 });
+    // UPDATED: Use seeded rng
+    const spawnPoint = gameState.spawnPoints[Math.floor(rng() * gameState.spawnPoints.length)];
+    const maxHp = 20 + Math.floor(rng() * 20) + Math.floor(gameTime / 30000);
+    gameState.enemies.push({
+        x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5,
+        speed: 1.2 + rng() * 0.6, // UPDATED: Use seeded rng
+        hp: maxHp, maxHp,
+        path: [], target: null, attackCooldown: 0,
+        pathfindingCooldown: 0
+    });
 }
 
 export function updateEnemies(dt) {
     for (let i = gameState.enemies.length - 1; i >= 0; i--) {
         const e = gameState.enemies[i];
-        if (e.hp <= 0) { gameState.enemies.splice(i, 1); continue; }
+        if (e.hp <= 0) {
+            gameState.enemies.splice(i, 1);
+            continue;
+        }
         e.attackCooldown -= dt;
         e.pathfindingCooldown -= dt;
 
@@ -189,6 +199,8 @@ export function updateProjectiles(dt) {
             gameState.projectiles.splice(i, 1);
             continue;
         }
-        if (p.life <= 0 || p.target?.hp <= 0) gameState.projectiles.splice(i, 1);
+        if (p.life <= 0 || p.target?.hp <= 0) {
+            gameState.projectiles.splice(i, 1);
+        }
     }
 }
