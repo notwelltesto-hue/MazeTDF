@@ -1,6 +1,6 @@
 // js/drawing.js
 
-import { TILE_SIZE, CHUNK_SIZE, CANVAS_W, CANVAS_H, GUI_CONFIG, HOTBAR_TOWERS, COST, TOWER } from './config.js';
+import { TILE_SIZE, CHUNK_SIZE, CANVAS_W, CANVAS_H, GUI_CONFIG, HOTBAR_TOWERS, COST, TOWER, TOWER_RANGES } from './config.js';
 import { camera, gameState, guiState, GAME_SEED } from './state.js';
 import { getChunk } from './world.js';
 import { assets } from './assets.js';
@@ -77,18 +77,13 @@ export function drawTowers(ctx) {
         const cy = (t.y + 0.5) * TILE_SIZE;
         const size = TILE_SIZE;
         ctx.globalAlpha = t.isConstructing ? 0.5 + t.buildProgress * 0.5 : 1.0;
-
-        // --- UPDATED: Draw Basic Tower Sprite ---
         if (t.type === TOWER.BASIC) {
             if (assets.basicTower) {
-                ctx.save();
-                ctx.translate(cx, cy);
-                // The sprite faces up, so we add 90 degrees (PI/2) to align it with the game's 0-degree rightward angle
+                ctx.save(); ctx.translate(cx, cy);
                 ctx.rotate(t.angle + Math.PI / 2);
                 ctx.drawImage(assets.basicTower, -size / 2, -size / 2, size, size);
                 ctx.restore();
             } else {
-                // Fallback drawing
                 ctx.fillStyle = 'blue'; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.3, 0, Math.PI * 2); ctx.fill();
             }
         } else if (t.type === TOWER.LIGHTER) {
@@ -103,7 +98,6 @@ export function drawTowers(ctx) {
             ctx.strokeStyle = t.isPowered ? '#fff' : '#aaa';
             ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, TILE_SIZE * 0.2, 0, Math.PI * 2); ctx.stroke();
         }
-
         ctx.globalAlpha = 1.0;
         const barWidth = TILE_SIZE * 0.8;
         const barY = cy - TILE_SIZE * 0.6;
@@ -137,8 +131,6 @@ export function drawHoverOverlay(ctx) {
     }
 }
 
-const TOWER_RANGES = { [TOWER.BASIC]: 3.2, [TOWER.SUPPLY]: 7 };
-
 export function drawPlacementPreview(ctx) {
     if (gameState.hoveredTower || guiState.isMouseOverGUI) return;
     const {x, y} = gameState.mouseGridPos;
@@ -148,13 +140,11 @@ export function drawPlacementPreview(ctx) {
     const size = TILE_SIZE;
     const isValid = canPlaceTower(x,y);
     ctx.globalAlpha = 0.5;
-
     let icon = null;
     if (type === TOWER.MINE) icon = assets.gemMine;
     else if (type === TOWER.LIGHTER) icon = assets.lightTower;
-    else if (type === TOWER.BASIC) icon = assets.basicTower; // UPDATED
+    else if (type === TOWER.BASIC) icon = assets.basicTower;
     else if (type === TOWER.SUPPLY) icon = assets.supplyRelayIcon;
-
     if (icon) {
         ctx.drawImage(icon, cx - size / 2, cy - size / 2, size, size);
     } else {
@@ -259,7 +249,7 @@ function drawHotbar(ctx) {
         const iconY = y + (GUI_CONFIG.HOTBAR_SLOT_SIZE - iconSize) / 2;
         let icon = null;
         const towerType = HOTBAR_TOWERS[i];
-        if (towerType === TOWER.BASIC) icon = assets.basicTower; // UPDATED
+        if (towerType === TOWER.BASIC) icon = assets.basicTower;
         else if (towerType === TOWER.LIGHTER) icon = assets.lightTower;
         else if (towerType === TOWER.MINE) icon = assets.gemMine;
         else if (towerType === TOWER.SUPPLY) icon = assets.supplyRelayIcon;
