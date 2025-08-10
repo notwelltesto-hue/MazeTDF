@@ -33,8 +33,9 @@ export const gameState = {
     lastSpawn: 0,
     selectedTower: 'basic',
     hoveredTower: null,
-    mouseGridPos: { x: 0, y: 0 }, // For placement preview
-    animationTimer: 0, // For spinning circles and pulsing lines
+    mouseGridPos: { x: 0, y: 0 },
+    animationTimer: 0,
+    allowSpawners: false, // ADDED: Flag for the "peaceful start"
 };
 
 export function setSeed(newSeed) {
@@ -54,4 +55,5 @@ export function resetState() {
     gameState.lastSpawn = 0;
     gameState.hoveredTower = null;
     gameState.animationTimer = 0;
+    gameState.allowSpawners = false; // Set to false on every reset
 }
