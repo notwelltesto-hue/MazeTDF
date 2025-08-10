@@ -130,7 +130,13 @@ export function spawnEnemy(gameTime) {
     if (gameState.spawnPoints.length === 0) return;
     const spawnPoint = gameState.spawnPoints[Math.floor(rng() * gameState.spawnPoints.length)];
     const maxHp = 20 + Math.floor(rng() * 20) + Math.floor(gameTime / 30000);
-    gameState.enemies.push({ x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5, speed: 1.2 + rng() * 0.6, hp: maxHp, maxHp, path: [], target: null, attackCooldown: 0 });
+    gameState.enemies.push({
+        x: spawnPoint.x + 0.5, y: spawnPoint.y + 0.5,
+        speed: 1.2 + rng() * 0.6,
+        hp: maxHp, maxHp,
+        path: [], target: null, attackCooldown: 0,
+        pathfindingCooldown: 0 // ADDED: For freeze prevention
+    });
 }
 
 export function updateEnemies(dt) {
@@ -141,10 +147,11 @@ export function updateEnemies(dt) {
             continue;
         }
         e.attackCooldown -= dt;
+        e.pathfindingCooldown -= dt; // Decrement cooldown
 
         if (!e.target || e.target.hp <= 0) {
             e.target = findClosestTarget(e);
-            e.path = world.findPath(e, e.target);
+            e.path = null; // Invalidate path to force recalculation
         }
 
         const targetPos = { x: e.target.x + 0.5, y: e.target.y + 0.5 };
@@ -154,11 +161,18 @@ export function updateEnemies(dt) {
             if (e.attackCooldown <= 0) {
                 e.target.hp -= 10;
                 e.attackCooldown = 1.0;
-                if (e.target === gameState.base) {
-                    gameState.lives--;
-                }
+                if (e.target === gameState.base) gameState.lives--;
             }
         } else {
+            // Pathfind only if cooldown is over
+            if (!e.path && e.pathfindingCooldown <= 0) {
+                e.path = world.findPath(e, e.target);
+                // If pathfinding fails, set a cooldown to prevent constant checks
+                if (!e.path) {
+                    e.pathfindingCooldown = 2.0;
+                }
+            }
+
             if (e.path && e.path.length > 0) {
                 const nextNode = e.path[0];
                 const tx = nextNode.x + 0.5, ty = nextNode.y + 0.5;
@@ -172,8 +186,6 @@ export function updateEnemies(dt) {
                     e.x += (tx - e.x) / distToNode * move;
                     e.y += (ty - e.y) / distToNode * move;
                 }
-            } else if (!e.path) {
-                e.path = world.findPath(e, e.target);
             }
         }
     }
