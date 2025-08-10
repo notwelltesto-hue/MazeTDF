@@ -43,10 +43,10 @@ function deterministicMazeTile(x, y) {
     const highP_y = p1 > p2 ? r1y : r2y;
 
     const neighbors = [
-        { x: highP_x, y: highP_y - 2, priority: getCellPriority(highP_x, highP_y - 2) }, // North
-        { x: highP_x + 2, y: highP_y, priority: getCellPriority(highP_x + 2, highP_y) }, // East
-        { x: highP_x, y: highP_y + 2, priority: getCellPriority(highP_x, highP_y + 2) }, // South
-        { x: highP_x - 2, y: highP_y, priority: getCellPriority(highP_x - 2, highP_y) }, // West
+        { x: highP_x, y: highP_y - 2, priority: getCellPriority(highP_x, highP_y - 2) },
+        { x: highP_x + 2, y: highP_y, priority: getCellPriority(highP_x + 2, highP_y) },
+        { x: highP_x, y: highP_y + 2, priority: getCellPriority(highP_x, highP_y + 2) },
+        { x: highP_x - 2, y: highP_y, priority: getCellPriority(highP_x - 2, highP_y) },
     ];
 
     let minPriority = Infinity;
@@ -85,25 +85,61 @@ function generateChunk(cx, cy) {
     const worldStartX = cx * CHUNK_SIZE;
     const worldStartY = cy * CHUNK_SIZE;
 
+    // First Pass: Generate the chunk based on the maze algorithm
     for (let ly = 0; ly < CHUNK_SIZE; ly++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
             const worldX = worldStartX + lx;
             const worldY = worldStartY + ly;
-
             const det = deterministicMazeTile(worldX, worldY);
             chunk.tiles[ly][lx] = det.tile;
             chunk.gemNodes[ly][lx] = det.gem;
-
-            // NEW: Force a clear, open area around the base
-            const STARTING_CLEAR_RADIUS = 3; // Creates a 7x7 open area
-            if (Math.hypot(worldX, worldY) <= STARTING_CLEAR_RADIUS) {
-                chunk.tiles[ly][lx] = 0; // Force path
-                chunk.gemNodes[ly][lx] = false; // No gems in the immediate start area
-            }
         }
     }
+
+    // Second Pass (only for the starting chunk): Guarantee a clear area and minimum gems
+    if (cx === 0 && cy === 0) {
+        const STARTING_CLEAR_RADIUS = 3;
+        const MIN_GEMS = 3;
+        let gemCount = 0;
+        const potentialGemSpots = [];
+
+        // Clear the area, count existing gems, and find spots for new ones
+        for (let y = -STARTING_CLEAR_RADIUS; y <= STARTING_CLEAR_RADIUS; y++) {
+            for (let x = -STARTING_CLEAR_RADIUS; x <= STARTING_CLEAR_RADIUS; x++) {
+                if (Math.hypot(x, y) > STARTING_CLEAR_RADIUS) continue;
+
+                const { cx: cxt, cy: cyt, lx, ly } = worldToChunkCoords(x, y);
+                if (cxt === 0 && cyt === 0) {
+                    // Force path
+                    chunk.tiles[ly][lx] = 0;
+
+                    if (chunk.gemNodes[ly][lx]) {
+                        gemCount++;
+                    } else if (x !== 0 || y !== 0) { // Can't place a gem on the base tile
+                        potentialGemSpots.push({lx, ly});
+                    }
+                }
+            }
+        }
+
+        // Add gems if the count is below the minimum
+        let gemsToAdd = MIN_GEMS - gemCount;
+        // Shuffle potential spots for random placement
+        for (let i = potentialGemSpots.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [potentialGemSpots[i], potentialGemSpots[j]] = [potentialGemSpots[j], potentialGemSpots[i]];
+        }
+
+        while (gemsToAdd > 0 && potentialGemSpots.length > 0) {
+            const spot = potentialGemSpots.pop();
+            chunk.gemNodes[spot.ly][spot.lx] = true;
+            gemsToAdd--;
+        }
+    }
+
     return chunk;
 }
+
 
 export function getChunk(cx, cy) {
     const key = `${cx},${cy}`;
